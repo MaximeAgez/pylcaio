@@ -20,15 +20,18 @@ def test_identify_rows(random_LCA_system, random_IO_system, random_parameters):
                                    io_database_name_and_version = 'exiobase3',
                                    listcountry = random_parameters['listcountry'],
                                    listregions = random_parameters['listregions'],
-                                   listcountry_per_regions = random_parameters['listcountry_per_regions'],
+                                   countries_per_regions = random_parameters['countries_per_regions'],
                                    replacements1 = random_parameters['replacements1'],
                                    reference_year_IO = random_parameters['reference_year_IO'],
                                    number_of_countries_IO = random_parameters['number_of_countries_IO'],
                                    numer_of_products_IO = random_parameters['number_of_products_IO'])
     pylcaio_object.identify_rows()
 
-    assert ['FR', 'CH', 'ZA'] in pylcaio_object.dictRoW.values()
-    assert ['CA', 'ZA'] in pylcaio_object.dictRoW.values()
+    sets = []
+    for RoW in pylcaio_object.dictRoW.values():
+        sets.append(set(RoW))
+    assert set(['FR', 'CH', 'ZA']) in sets
+    assert set(['CA', 'ZA']) in sets
     assert len(pylcaio_object.dictRoW.values()) == 2
     assert type(pylcaio_object.dictRoW) == dict
     assert 'RoW' not in pylcaio_object.PRO_f.io_geography.tolist()
