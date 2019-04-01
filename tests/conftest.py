@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import uuid
+from collections import defaultdict
 
 @pytest.fixture()
 def random_LCA_system():
@@ -14,19 +15,19 @@ def random_LCA_system():
     productId3 = str(uuid.uuid4())
     productId4 = str(uuid.uuid4())
     productId5 = str(uuid.uuid4())
-    PRO_f = pd.DataFrame([['product1', productId1, 'activity1', activityId1, 'CA-QC', 'CA', 1.1],
-                          ['product2', productId2, 'activity2', activityId2, 'RER', 'RER', 1.2],
-                          ['product3', productId3, 'activity2', activityId2, 'RoW', 'RoW', 1.3],
-                          ['product4', productId4, 'activity3', activityId3, 'CH', 'CH', 1.4],
-                          ['product5', productId5, 'activity1', activityId1, 'RoW', 'RoW', 1.5]],
+    PRO_f = pd.DataFrame([['product1', productId1, 'activity1', 'activityNameId1', activityId1, 'CA-QC', 'CA', 1.1],
+                          ['product2', productId2, 'activity2', 'activityNameId2', activityId2, 'RER', 'RER', 1.2],
+                          ['product3', productId3, 'activity2', 'activityNameId2', activityId2, 'RoW', 'RoW', 1.3],
+                          ['product4', productId4, 'activity3', 'activityNameId3', activityId3, 'CH', 'CH', 1.4],
+                          ['product5', productId5, 'activity1', 'activityNameId1', activityId1, 'RoW', 'RoW', 1.5]],
                          index=[str(productId1) + '_' + str(activityId1), str(productId2) + '_' + str(activityId2),
-                                str(productId3) + '_' + str(activityId3),
+                                str(productId3) + '_' + str(activityId2),
                                 str(productId4) + '_' + str(activityId3), str(productId5) + '_' + str(activityId1)],
-                         columns=['productName', 'productId', 'activityName', 'activityId', 'geography', 'io_geography',
-                                  'price'])
+                         columns=['productName', 'productId', 'activityName', 'activityNameId', 'activityId',
+                                  'geography', 'io_geography', 'price'])
     A_ff = pd.DataFrame(np.random.random_sample((5, 5)),
                         index=[str(productId1) + '_' + str(activityId1), str(productId2) + '_' + str(activityId2),
-                               str(productId3) + '_' + str(activityId3),
+                               str(productId3) + '_' + str(activityId2),
                                str(productId4) + '_' + str(activityId3), str(productId5) + '_' + str(activityId1)],
                         columns=[str(productId1) + '_' + str(activityId1), str(productId2) + '_' + str(activityId2),
                                  str(productId3) + '_' + str(activityId3),
@@ -35,7 +36,7 @@ def random_LCA_system():
 
     F_f = pd.DataFrame(np.random.random_sample((3, 5)), index=['pollutant1', 'pollutant2', 'pollutant3'],
                        columns=[str(productId1) + '_' + str(activityId1), str(productId2) + '_' + str(activityId2),
-                                str(productId3) + '_' + str(activityId3),
+                                str(productId3) + '_' + str(activityId2),
                                 str(productId4) + '_' + str(activityId3), str(productId5) + '_' + str(activityId1)])
     C_f = pd.DataFrame(np.random.random_sample((3, 3)), index=['impact1', 'impact2', 'impact3'],
                        columns=['pollutant1', 'pollutant2', 'pollutant3'])
@@ -46,8 +47,14 @@ def random_LCA_system():
                          columns=['pollutant_name', 'pollutant_unit', 'pollutant_comp', 'cas'])
     y_f = pd.DataFrame(np.eye(len(A_ff)), A_ff.index, A_ff.columns)
 
+    list_to_hyb = [str(productId1) + '_' + str(activityId1),str(productId2) + '_' + str(activityId2),
+                   str(productId4) + '_' + str(activityId3)]
+    list_not_to_hyb = [str(productId3) + '_' + str(activityId2),str(productId5) + '_' + str(activityId1)]
+    listmarket = [str(productId3) + '_' + str(activityId2)]
+
     dict_dataframes = {'PRO_f': PRO_f, 'A_ff': A_ff, 'F_f': F_f, 'C_f': C_f, 'STR_f': STR_f, 'y_f': y_f,
-                       'lca_database_name_and_version': lca_database_name_and_version}
+                       'lca_database_name_and_version': lca_database_name_and_version, 'list_to_hyb':list_to_hyb,
+                       'list_not_to_hyb':list_not_to_hyb, 'listmarket':listmarket}
     return dict_dataframes
 
 @pytest.fixture()
@@ -78,7 +85,10 @@ def random_IO_system():
 def random_parameters():
     listcountry = ['FR', 'CA', 'CH', 'ZA']
     listregions = ['GLO', 'RER']
-    listcountry_per_regions = [listcountry, ['FR', 'CH']]
+
+    countries_per_regions = defaultdict(list)
+    countries_per_regions['GLO'] = listcountry
+    countries_per_regions['RER'] = ['FR', 'CH']
 
     replacements1 = {'CA-QC': 'CA'}
 
@@ -87,7 +97,7 @@ def random_parameters():
     number_of_products_IO = 5
 
     dict_parameters = {'listcountry': listcountry, 'listregions': listregions,
-                       'listcountry_per_regions': listcountry_per_regions, 'replacements1': replacements1,
+                       'countries_per_regions': countries_per_regions, 'replacements1': replacements1,
                        'reference_year_IO': reference_year_IO, 'number_of_countries_IO': number_of_countries_IO,
                        'number_of_products_IO': number_of_products_IO}
     return dict_parameters
