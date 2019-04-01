@@ -920,8 +920,11 @@ class LCAIO:
         # put all of that in dictRoW
         for i in range(0, len(unique_RoWs)):
             self.dictRoW[listname[i]] = unique_RoWs[i]
-        # one RoW is empty because processes from ecoinvent are too described
-        del [[k for k in self.dictRoW.keys() if len(self.dictRoW[k]) == 0][0]]
+        try:
+            # if RoWs are empty because processes from ecoinvent are too described
+            del [[k for k in self.dictRoW.keys() if len(self.dictRoW[k]) == 0][0]]
+        except IndexError:
+            pass
         for keys in dictactrow:
             for keys2 in self.dictRoW:
                 if dictactrow[keys] == self.dictRoW[keys2]:
@@ -1047,8 +1050,8 @@ class LCAIO:
         Amarket.loc[self.listmarket] = 0
 
         Identity = pd.DataFrame(np.eye(len(ANT)), index=ANT.index, columns=ANT.columns)
-        foo = pd.DataFrame(np.linalg.inv(Identity - ANT), index=ANT.index, columns=ANT.columns)
-        self.A_ff_processed = Amarket.dot(foo)
+        df = pd.DataFrame(np.linalg.inv(Identity - ANT), index=ANT.index, columns=ANT.columns)
+        self.A_ff_processed = Amarket.dot(df)
 
         # the inversion brings a lot of noise which falsely contributes to double counting which is why it is removed
         self.A_ff_processed[self.A_ff_processed < 10 ** -16] = 0
