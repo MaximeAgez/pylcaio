@@ -24,7 +24,10 @@ def test_identify_rows(random_LCA_system, random_IO_system, random_parameters):
                                    replacements1 = random_parameters['replacements1'],
                                    reference_year_IO = random_parameters['reference_year_IO'],
                                    number_of_countries_IO = random_parameters['number_of_countries_IO'],
-                                   numer_of_products_IO = random_parameters['number_of_products_IO'])
+                                   number_of_products_IO = random_parameters['number_of_products_IO'],
+                                   list_to_hyb = random_LCA_system['list_to_hyb'],
+                                   list_not_hyb = random_LCA_system['list_not_to_hyb'],
+                                   listmarket = random_LCA_system['listmarket'])
     pylcaio_object.identify_rows()
 
     sets = []
