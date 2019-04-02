@@ -1,0 +1,1 @@
+['Liquid Fuels', 'Solid Fuels', 'Gaseous Fuels', 'Electricity/heat','Transport']
