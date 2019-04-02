@@ -126,6 +126,7 @@ class DatabaseLoader:
         self.STR_io = pd.DataFrame()
 
         self.io_categories = defaultdict(list)
+        self.categories_same_functionality = []
 
         self.listcountry = []
         self.listregions = []
@@ -202,6 +203,7 @@ class DatabaseLoader:
             self.listguillotine = package_ecoinvent['listguillotine']
             self.null_price = package_ecoinvent['null_price']
             self.io_categories = package_ecoinvent['io_categories']
+            self.categories_same_functionality = package_ecoinvent['categories_same_functionality']
             self.listcreated = package_ecoinvent['created_processes']
 
             return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
@@ -216,6 +218,7 @@ class DatabaseLoader:
                          dummyprocesses=self.dummyprocesses, listnottransacted=self.listnottransacted,
                          null_price=self.null_price, listguillotine=self.listguillotine,
                          io_categories=self.io_categories,
+                         categories_same_functionality=self.categories_same_functionality,
                          lca_database_name_and_version=self.lca_database_name_and_version,
                          io_database_name_and_version=self.io_database_name_and_version)
 
@@ -334,6 +337,11 @@ class DatabaseLoader:
                     '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
                                                                                  '/STAM_categories.txt').decode(
                 'utf-8'))
+            self.categories_same_functionality = ast.literal_eval(
+                pkg_resources.resource_string(
+                    __name__,
+                    '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/STAM_functional_categories.txt').decode(
+                    'utf-8'))
 
             # GEOGRAPHY CONCORDANCE
 
@@ -445,6 +453,7 @@ class DatabaseLoader:
                          null_price=self.null_price, listguillotine=self.listguillotine,
                          list_uncovered_geographies=self.list_uncovered_geographies,
                          io_categories=self.io_categories,
+                         categories_same_functionality=self.categories_same_functionality,
                          lca_database_name_and_version=self.lca_database_name_and_version,
                          io_database_name_and_version=self.io_database_name_and_version)
 
@@ -543,6 +552,7 @@ class DatabaseLoader:
                    'listmarket': self.listmarket, 'dummyprocesses': self.dummyprocesses,
                    'listnottransacted': self.listnottransacted, 'null_price': self.null_price,
                    'listguillotine': self.listguillotine, 'io_categories': self.io_categories,
+                   'categories_same_functionality': self.categories_same_functionality,
                    'created_processes': self.listcreated}
 
         if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/ecoinvent_with_added_processes')):
@@ -621,6 +631,7 @@ class LCAIO:
         self.STR_io = pd.DataFrame()
 
         self.io_categories = defaultdict(list)
+        self.categories_same_functionality = []
 
         self.listcountry = []
         self.listregions = []
@@ -797,7 +808,7 @@ class LCAIO:
                                   columns=self.total_prod_country.index.get_level_values('region'),
                                   index=self.total_prod_country.index.get_level_values('sector'))
         # some more indexing
-        pivoting = pivoting.reindex(self.total_prod_country.index.get_level_values('sector')[:200])
+        pivoting = pivoting.reindex(self.total_prod_country.index.get_level_values('sector')[:self.number_of_products_IO])
         pivoting.columns = pivoting.columns.droplevel(0)
 
         # add total prods of regions and RoWs
@@ -856,9 +867,8 @@ class LCAIO:
             phi_filter_matrix = pd.DataFrame(1, index=self.A_io_f.index, columns=self.A_io_f.columns)
             categories_used_by_processes = self.G.transpose().dot(self.H.dot(self.A_ff_processed))
             categories_used_by_processes = categories_used_by_processes.astype(dtype='float32')
-            categories_same_functionality = ['Liquid Fuels', 'Solid Fuels', 'Gaseous Fuels', 'Electricity/heat',
-                                             'Transport']
-            for category in categories_same_functionality:
+
+            for category in self.categories_same_functionality:
                 list_category_to_zero = [i for i in categories_used_by_processes.columns if
                                          categories_used_by_processes.loc[category, i] != 0]
                 phi_filter_matrix.loc[[i for i in phi_filter_matrix.index if
@@ -951,6 +961,10 @@ class LCAIO:
                                       '/Regionalized_electricity_prices.xlsx'))
 
         electricity_processes = self.PRO_f.price[[i for i in self.PRO_f.index if self.PRO_f.price[i] == 0.0977]]
+
+        if electricity_processes.empty:
+            return
+
         merged = self.PRO_f.loc[electricity_processes.index.values,
                                 ['price', 'io_geography']].merge(electricity_price,left_on='io_geography',
                                                                  right_on=electricity_price.index,how='left')
