@@ -9,4 +9,4 @@
 'IN-MP':'IN','IN-DL':'IN','IN-JH':'IN','IN-WB':'IN','IN-MH':'IN','IN-WF':'IN','IN-RJ':'IN','IN-KA':'IN','IN-AP':'IN','IN-HR':'IN',
 'IN-BR':'IN','IN-WE':'IN','IN-UP':'IN','IN-KL':'IN','IN-MN':'IN','IN-UT':'IN','IN-NL':'IN','IN-ML':'IN','IN-HP':'IN','IN-AS':'IN',
 'IN-SK':'IN','IN-WL':'IN','IN-JK':'IN','IN-TR':'IN','IN-GA':'IN','IN-PY':'IN','IN-Eastern grid':'IN','IN-Northern grid':'IN',
-'IN-North_eastern grid':'IN','IN-Western grid':'IN','IN-Southern grid':'IN'}
+'IN-North-eastern grid':'IN','IN-Western grid':'IN','IN-Southern grid':'IN'}
