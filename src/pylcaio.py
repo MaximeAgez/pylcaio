@@ -155,6 +155,13 @@ class DatabaseLoader:
         self.LCA_database = lca_database_processed
         self.IO_database = io_database_processed
 
+        versions_of_ecoinvent = ['ecoinvent3.5','ecoinvent3.3']
+        versions_of_exiobase = ['exiobase2','exiobase3']
+        if self.lca_database_name_and_version not in versions_of_ecoinvent:
+            print('The LCA database version you entered is not supported currently')
+        if self.io_database_name_and_version not in versions_of_exiobase:
+            print('The IO database version you entered is not supported currently')
+
     def combine_ecoinvent_exiobase(self, path_to_io_database):
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args
@@ -440,6 +447,8 @@ class DatabaseLoader:
                     self.listmarket + self.listnottransacted + self.listguillotine + self.dummyprocesses
                     + self.null_price + self.list_uncovered_geographies)
 
+            self.qualitychecks()
+
             return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
                          F_io=self.F_io,
                          F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io,
@@ -572,6 +581,93 @@ class DatabaseLoader:
             if productName in self.PRO_f.productName[i]:
                 print('productName is: ', self.PRO_f.productName[i], '/ activityName is: ', self.PRO_f.activityName[i],
                       '/ geography is: ', self.PRO_f.geography[i], '/ UUID is: ', self.PRO_f.index[i])
+
+    def qualitychecks(self):
+        """ Several quality checks to ensure that data entered by the user in the numerous excel and text files
+        does not contain errors """
+        if self.A_ff.empty:
+            raise Exception('A_ff is empty!')
+        if self.A_io.empty:
+            raise Exception('A_io is empty!')
+        if self.F_f.empty:
+            raise Exception('F_f is empty!')
+        if self.F_io.empty:
+            raise Exception('F_io is empty!')
+        if self.C_f.empty:
+            raise Exception('C_f is empty!')
+        if self.C_io.empty:
+            raise Exception('C_io is empty!')
+        if len(self.list_to_hyb) == 0:
+            raise Exception('list_to_hyb is empty!')
+        if len(self.list_not_to_hyb) == 0:
+            raise Exception('list_not_to_hyb is empty!')
+        if len(self.listmarket) == 0:
+            raise Exception('listmarket is empty!')
+        if len(self.listcountry) == 0:
+            raise Exception('listcountry is empty!')
+        if len(self.listregions) == 0:
+            raise Exception('listregions is empty!')
+        if len(self.countries_per_regions) == 0:
+            raise Exception('no concordance between regions and countries entered')
+        if len(self.io_categories) == 0:
+            raise Exception('no concordance between categories and product groups entered')
+        if self.reference_year_IO == 0:
+            raise Exception('no reference year entered')
+        if self.number_of_products_IO == 0:
+            raise Exception('no number of products of IO entered')
+        if self.number_of_countries_IO == 0:
+            raise Exception('no number of countries of IO entered')
+        if len([k for k in self.countries_per_regions.keys() if k not in self.listregions]) != 0:
+            raise Exception('countries_per_regions countains regions that are not in listregions')
+        if len([k for k in self.listregions if k not in self.countries_per_regions.keys()]) != 0:
+            raise Exception('some regions of listregions are not translated into countries in countries_per_regions')
+        for list_of_country in self.countries_per_regions.values():
+            for country in list_of_country:
+                if country not in self.listcountry:
+                    raise Exception('some countries in countries_per_regions are not present in listcountry')
+        if len([cat for cat in self.categories_same_functionality if cat not in self.io_categories.keys()]) != 0:
+            raise Exception('All categories of same functionality must also be declared in io_categories')
+        groups = []
+        for list_of_groups in self.io_categories.values():
+            for group in list_of_groups:
+                if group in self.A_io.index.levels[1]:
+                    groups.append(group)
+        if len(set(groups)) != len(groups):
+            raise Exception('Each product group can only belong to one category')
+        if pd.DataFrame(self.PRO_f.ProductTypeName[self.list_to_hyb]).isnull().any()[0]:
+            raise Exception('A process to hybridize is not matched to any product group')
+        if len([geo for geo in self.PRO_f.io_geography if (geo not in self.A_io.index.levels[0]
+                                                       and geo not in self.listregions
+                                                       and geo!='RoW'
+                                                      )]) != 0:
+            raise Exception('A geography supposed to be used to hybridize processes is not included in the IO database')
+        if not len(set(self.PRO_f.index.tolist())) == len(self.PRO_f.index.tolist()):
+            raise Exception('Duplicate in the indexes of PRO_f')
+        if self.A_ff.isnull().any().any():
+            raise Exception('NaN values in A_ff')
+        if not self.A_ff[self.A_ff<0].isna().all().all():
+            raise Expception('Negative values in A_ff')
+        if not (self.A_ff.index == self.PRO_f.index).all():
+            raise Exception('A_ff and PRO_f do not have the same index')
+        if not (self.A_ff.index == self.A_ff.columns).all():
+            raise Exception('A_ff indexes and columns are not identical')
+        if not len(self.list_to_hyb)+len(self.list_not_to_hyb) == len(self.PRO_f):
+            raise Exception('Some processes are neither in list_to_hyb nor list_not_to_hyb')
+        if not len(self.list_not_to_hyb) == (len(self.listmarket)+len(self.dummyprocesses)+len(self.null_price)+
+                                             len(self.listnottransacted)+len(self.list_uncovered_geographies)+
+                                             len(self.listguillotine)):
+            raise Exception('The elements of list_not_to_hyb do not match with more accurate not-to-hyb classifications '
+                            '(e.g., listmarket, listnottransacted, etc.)')
+        if not (self.F_f.index.tolist().sort() == self.C_f.columns.tolist().sort()):
+            raise Exception('Rows of F_f must match with columns of C_f')
+        if not (self.F_io.index.tolist().sort() == self.C_io.columns.tolist().sort()):
+            raise Exception('Rows of F_io must match with columns of C_io')
+        if not (self.A_ff.index.tolist().sort() == self.F_f.columns.tolist().sort()):
+            raise Exception('Rows of A_ff must match with columns of F_f')
+        if not (self.A_io.index.tolist().sort() == self.F_io.columns.tolist().sort()):
+            raise Exception('Rows of A_io must match with columns of F_io')
+        if not (self.PRO_f.activityId+'_'+self.PRO_f.productId == self.PRO_f.index).all():
+            raise Exception('Indexes must be a combination of activityId and productId, in this order')
 
 
 class LCAIO:
