@@ -29,11 +29,8 @@ import gzip
 import pickle
 import ast
 import pkg_resources
-import re
 
 pd.set_option('mode.chained_assignment', None)
-
-
 # pylint: disable-msg=C0103
 
 
@@ -449,6 +446,8 @@ class DatabaseLoader:
 
             self.qualitychecks()
 
+            self.read_template()
+
             return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
                          F_io=self.F_io,
                          F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io,
@@ -465,6 +464,51 @@ class DatabaseLoader:
                          categories_same_functionality=self.categories_same_functionality,
                          lca_database_name_and_version=self.lca_database_name_and_version,
                          io_database_name_and_version=self.io_database_name_and_version)
+
+    def read_template(self):
+        template_foreground_metadata = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
+                                                      '/Template.xlsx'), 'Metadata_foreground'))
+        template_foreground_exchanges = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
+                                                      '/Template.xlsx'), 'unit_processes_exchanges')).ffill()
+        self.PRO_f = pd.concat([self.PRO_f, template_foreground_metadata], sort=False)
+        for process_to_add in template_foreground_metadata.index:
+            self.add_process_to_matrices(process_to_add)
+
+        technosphere_exchanges = template_foreground_exchanges.loc[[i for i in template_foreground_exchanges.index if
+                                                                    template_foreground_exchanges.input_output[
+                                                                        i] in self.PRO_f.index]]
+        pivot1 = pd.pivot_table(technosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
+                            values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum, fill_value=0)
+        del pivot1.index.name
+        del pivot1.columns.name
+        pivot1 = self.LCA_convention_to_IO(pivot1)
+        self.A_ff.loc[pivot1.index, template_foreground_metadata.index] = pivot1
+
+        biosphere_exchanges = template_foreground_exchanges.loc[[i for i in template_foreground_exchanges.index if
+                                                                    template_foreground_exchanges.input_output[
+                                                                        i] in self.STR_f.index]]
+
+        pivot2 = pd.pivot_table(biosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
+                                values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum,
+                                fill_value=0)
+        del pivot2.index.name
+        del pivot2.columns.name
+        pivot2 = self.LCA_convention_to_IO(pivot2)
+        self.F_f.loc[pivot2.index, template_foreground_metadata.index] = pivot2
+
+    def add_process_to_matrices(self, index):
+        """ Creates an empty row and empty column for processes to add """
+        self.A_ff[index] = 0
+        self.A_ff = pd.concat([self.A_ff, pd.DataFrame(0, columns=self.A_ff.columns, index=[index])], sort=False)
+        self.F_f[index] = 0
+
+    def LCA_convention_to_IO(self, dataframe):
+        """ Changes the convetion of an LCA technology matrix from LCA to IO """
+        # no ones on the diagonal
+        dataframe[dataframe == 1] = 0
+        # only positive values
+        dataframe = dataframe.abs()
+        return dataframe
 
     def add_process_to_ecoinvent(self):
         """function to add new processes to ecoinvent"""
@@ -646,7 +690,7 @@ class DatabaseLoader:
         if self.A_ff.isnull().any().any():
             raise Exception('NaN values in A_ff')
         if not self.A_ff[self.A_ff<0].isna().all().all():
-            raise Expception('Negative values in A_ff')
+            raise Exception('Negative values in A_ff')
         if not (self.A_ff.index == self.PRO_f.index).all():
             raise Exception('A_ff and PRO_f do not have the same index')
         if not (self.A_ff.index == self.A_ff.columns).all():
@@ -1193,19 +1237,6 @@ class LCAIO:
                                                                       '_hybrid_system.pickle')), 'wb') as f:
                 pickle.dump(hybrid_system, f)
 
-        elif file_format == 'csv':
-            csv_dir = path_pylcaio + '/hybridized_ecoinvent' + '_csv'
-            if not os.path.exist(csv_dir):
-                os.makedir(csv_dir)
-            self.PRO.to_csv(os.path.join(csv_dir, 'PRO.csv'))
-            self.STR.to_csv(os.path.join(csv_dir, 'STR.csv'))
-            if self.C is not None:
-                self.C_f.to_csv(os.path.join(csv_dir, 'C.csv'), sep='|')
-                self.IMP.to_csv(os.path.join(csv_dir, 'IMP.csv'), sep='|')
-            if self.A is not None:
-                self.A.to_csv(os.path.join(csv_dir, 'A.csv'), sep='|')
-                self.F.to_csv(os.path.join(csv_dir, 'F.csv'), sep='|')
-
         else:
             print('Enter a file format')
 
@@ -1573,3 +1604,9 @@ def sum_elements_list(liste):
         else:
             concatenated_list += [liste[i]]
     return concatenated_list
+
+def template_sheet_treatment(dataframe):
+    """ Removes empty rows and potential typos created Unnamed columns in the template """
+    dataframe = dataframe.dropna(how='all', axis=0)
+    dataframe = dataframe.drop([j for j in [i for i in dataframe.columns] if 'Unnamed' in j], axis=1)
+    return dataframe
