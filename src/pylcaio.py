@@ -152,8 +152,8 @@ class DatabaseLoader:
         self.LCA_database = lca_database_processed
         self.IO_database = io_database_processed
 
-        versions_of_ecoinvent = ['ecoinvent3.5','ecoinvent3.3']
-        versions_of_exiobase = ['exiobase2','exiobase3']
+        versions_of_ecoinvent = ['ecoinvent3.5', 'ecoinvent3.3']
+        versions_of_exiobase = ['exiobase2', 'exiobase3']
         if self.lca_database_name_and_version not in versions_of_ecoinvent:
             print('The LCA database version you entered is not supported currently')
         if self.io_database_name_and_version not in versions_of_exiobase:
@@ -169,307 +169,259 @@ class DatabaseLoader:
         version_ecoinvent = extract_version_from_name(self.lca_database_name_and_version)
         version_exiobase = extract_version_from_name(self.io_database_name_and_version)
 
-        # saved system with processes added to ecoinvent by the user
-        if os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                    '/ecoinvent_with_added_processes/' +
-                                                                    self.lca_database_name_and_version +
-                                                                    '.pickle')):
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      '/ecoinvent_with_added_processes/' +
-                                                                      self.lca_database_name_and_version +
-                                                                      '.pickle')), 'rb') as f:
-                package_ecoinvent = pd.read_pickle(f)
+        self.PRO_f = self.LCA_database['PRO'].copy()
+        self.PRO_f.price = self.PRO_f.price.fillna(0)
+        self.A_ff = self.LCA_database['A'].copy().fillna(0.0)
+        # check if there are some unwanted negative values lurking in the LCA database matrix
+        a_ff_copy = self.A_ff.copy()
+        a_ff_copy[a_ff_copy > 0] = 0
+        self.A_ff = self.A_ff + (-2) * a_ff_copy
+        self.A_ff = self.A_ff.astype(dtype='float32')
+        self.A_io = self.IO_database.A.copy()
+        self.A_io = self.A_io.astype(dtype='float32')
+        self.A_io_f = pd.DataFrame(0.0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
+        self.F_f = self.LCA_database['F'].copy().fillna(0.0)
+        self.F_f = self.F_f.astype(dtype='float32')
+        self.y_io = self.IO_database.Y.copy()
+        self.y_io = self.y_io.astype(dtype='float32')
+        self.y_f = pd.DataFrame(np.eye(len(self.A_ff)), self.A_ff.index, self.A_ff.columns, dtype='float32')
+        self.C_f = self.LCA_database['C'].copy()
+        self.C_f = self.C_f.astype(dtype='float32')
+        self.STR_f = self.LCA_database['STR'].copy().drop('cas', axis=1)
+        self.STR_f.columns = ['MATRIXID', 'FULLNAME', 'UNIT', 'comp', 'subcomp']
 
-            self.PRO_f = package_ecoinvent['PRO_f']
-            self.A_ff = package_ecoinvent['A_ff']
-            self.A_io = package_ecoinvent['A_io']
-            self.A_io_f = package_ecoinvent['A_io_f']
-            self.F_f = package_ecoinvent['F_f']
-            self.F_io = package_ecoinvent['F_io']
-            self.F_io_f = package_ecoinvent['F_io_f']
-            self.y_io = package_ecoinvent['y_io']
-            self.y_f = package_ecoinvent['y_f']
-            self.C_f = package_ecoinvent['C_f']
-            self.C_io = package_ecoinvent['C_io']
-            self.STR_f = package_ecoinvent['STR_f']
-            self.STR_io = package_ecoinvent['STR_io']
-            self.listregions = package_ecoinvent['listregions']
-            self.countries_per_regions = package_ecoinvent['countries_per_regions']
-            self.reference_year_IO = package_ecoinvent['reference_year_IO']
-            self.number_of_countries_IO = package_ecoinvent['number_of_countries_IO']
-            self.number_of_RoW_IO = package_ecoinvent['number_of_RoW_IO']
-            self.number_of_products_IO = package_ecoinvent['number_of_products_IO']
-            self.list_to_hyb = package_ecoinvent['list_to_hyb']
-            self.list_not_to_hyb = package_ecoinvent['list_not_to_hyb']
-            self.listmarket = package_ecoinvent['listmarket']
-            self.listnottransacted = package_ecoinvent['listnottransacted']
-            self.dummyprocesses = package_ecoinvent['dummyprocesses']
-            self.listguillotine = package_ecoinvent['listguillotine']
-            self.null_price = package_ecoinvent['null_price']
-            self.io_categories = package_ecoinvent['io_categories']
-            self.categories_same_functionality = package_ecoinvent['categories_same_functionality']
-            self.listcreated = package_ecoinvent['created_processes']
+        self.number_of_products_IO = len([i for i in self.IO_database.get_sectors()])
+        self.number_of_RoW_IO = 5
+        self.number_of_countries_IO = len([i for i in self.IO_database.get_regions()]) - self.number_of_RoW_IO
 
-            return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
-                         F_io=self.F_io,
-                         F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io,
-                         STR_f=self.STR_f,
-                         STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
-                         countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
-                         number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
-                         number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
-                         list_not_to_hyb=self.list_not_to_hyb, listmarket=self.listmarket,
-                         dummyprocesses=self.dummyprocesses, listnottransacted=self.listnottransacted,
-                         null_price=self.null_price, listguillotine=self.listguillotine,
-                         io_categories=self.io_categories,
-                         categories_same_functionality=self.categories_same_functionality,
-                         lca_database_name_and_version=self.lca_database_name_and_version,
-                         io_database_name_and_version=self.io_database_name_and_version)
+        if version_exiobase == str(2):
+            self.reference_year_IO = 2007
+            self.IO_database.emissions.S.index = self.IO_database.emissions.S.index.tolist()
+            self.IO_database.emissions.S.columns = self.IO_database.emissions.S.columns.tolist()
+            self.F_io = pd.concat(
+                [self.IO_database.emissions.S, self.IO_database.resources.S, self.IO_database.materials.S])
+            self.F_io = self.F_io / 1000000
+            for_update = self.IO_database.factor_inputs.S.loc[self.IO_database.factor_inputs.unit[
+                self.IO_database.factor_inputs.unit != 'M.EUR'].dropna().index] / 1000000
+            self.IO_database.factor_inputs.S.update(for_update)
+            self.F_io = pd.concat([self.F_io, self.IO_database.factor_inputs.S])
+            self.F_io = self.F_io.select_dtypes(include=['float']).apply(pd.to_numeric, downcast='float')
+            c_emissions = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
+                                        'Q_emission')
+            c_emissions.columns = self.IO_database.emissions.S.index
+            c_emissions = c_emissions.drop(c_emissions.index[0])
+            c_factorinputs = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
+                                           'Q_factorinputs')
+            c_factorinputs.columns = self.IO_database.factor_inputs.S.index
+            c_factorinputs = c_factorinputs.drop(c_factorinputs.index[0])
+            c_materials = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
+                                        'Q_materials')
+            c_materials.columns = self.IO_database.materials.S.index
+            c_materials = c_materials.drop(c_materials.index[0])
+            c_resources = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
+                                        'Q_resources')
+            c_resources.columns = self.IO_database.resources.S.index
+            c_resources = c_resources.drop(c_resources.index[0])
+            c_emissions.index = c_emissions.index.values
+            c_emissions.columns = c_emissions.columns.values
+            c_resources.columns = c_resources.columns.values
+            self.C_io = pd.concat([c_emissions, c_materials, c_resources, c_factorinputs], sort=False)
+            self.C_io = self.C_io.fillna(0)
+            self.C_io = self.C_io.astype(dtype='float32')
+            self.STR_io = pd.DataFrame([self.IO_database.emissions.S.index.tolist(),
+                                        [i[0] for i in self.IO_database.emissions.S.index],
+                                        [i[1] for i in self.IO_database.emissions.S.index]],
+                                       index=['MATRIXID', 'FULLNAME', 'comp']).transpose()
+            self.STR_io.index = self.STR_io.MATRIXID
+            self.STR_io = self.STR_io.drop('MATRIXID', axis=1)
 
-        # original ecoinvent, no processes added to it
-        else:
-            self.PRO_f = self.LCA_database['PRO'].copy()
-            self.PRO_f.price = self.PRO_f.price.fillna(0)
-            self.A_ff = self.LCA_database['A'].copy().fillna(0.0)
-            # check if there are some unwanted negative values lurking in the LCA database matrix
-            a_ff_copy = self.A_ff.copy()
-            a_ff_copy[a_ff_copy > 0] = 0
-            self.A_ff = self.A_ff + (-2) * a_ff_copy
-            self.A_ff = self.A_ff.astype(dtype='float32')
-            self.A_io = self.IO_database.A.copy()
-            self.A_io = self.A_io.astype(dtype='float32')
-            self.A_io_f = pd.DataFrame(0.0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
-            self.F_f = self.LCA_database['F'].copy().fillna(0.0)
-            self.F_f = self.F_f.astype(dtype='float32')
-            self.y_io = self.IO_database.Y.copy()
-            self.y_io = self.y_io.astype(dtype='float32')
-            self.y_f = pd.DataFrame(np.eye(len(self.A_ff)), self.A_ff.index, self.A_ff.columns, dtype='float32')
-            self.C_f = self.LCA_database['C'].copy()
-            self.C_f = self.C_f.astype(dtype='float32')
-            self.STR_f = self.LCA_database['STR'].copy().drop('cas', axis=1)
-            self.STR_f.columns = ['MATRIXID', 'FULLNAME', 'UNIT', 'comp', 'subcomp']
+        if version_exiobase == str(3):
+            # removing digits in the product group names of exiobase 3
+            new_index_tuple = []
+            for index in self.IO_database.A.index:
+                if any(char.isdigit() for char in index[1]):
+                    new_index_tuple.append((index[0], index[1][:-5]))
+                else:
+                    new_index_tuple.append(index)
+            index_without_numbers = pd.MultiIndex.from_tuples(new_index_tuple, names=['region', 'sector'])
+            self.A_io.index = index_without_numbers
+            self.A_io.columns = index_without_numbers
+            self.y_io.index = index_without_numbers
 
-            self.number_of_products_IO = len([i for i in self.IO_database.get_sectors()])
-            self.number_of_RoW_IO = 5
-            self.number_of_countries_IO = len([i for i in self.IO_database.get_regions()]) - self.number_of_RoW_IO
+            self.IO_database.calc_all()
+            self.F_io = self.IO_database.satellite.S
+            # emissions for millions of euros, we want them in euros, except value added
+            for_update = self.IO_database.satellite.S.loc[self.IO_database.satellite.unit[
+                self.IO_database.satellite.unit != 'M.EUR'].dropna().index]/1000000
+            self.F_io.update(for_update)
+            self.F_io.columns = index_without_numbers
+            self.F_io = self.F_io.astype(dtype='float32')
 
-            if version_exiobase == str(2):
-                self.reference_year_IO = 2007
-                self.IO_database.emissions.S.index = self.IO_database.emissions.S.index.tolist()
-                self.IO_database.emissions.S.columns = self.IO_database.emissions.S.columns.tolist()
-                self.F_io = pd.concat(
-                    [self.IO_database.emissions.S, self.IO_database.resources.S, self.IO_database.materials.S])
-                self.F_io = self.F_io / 1000000
-                for_update = self.IO_database.factor_inputs.S.loc[self.IO_database.factor_inputs.unit[
-                    self.IO_database.factor_inputs.unit != 'M.EUR'].dropna().index] / 1000000
-                self.IO_database.factor_inputs.S.update(for_update)
-                self.F_io = pd.concat([self.F_io, self.IO_database.factor_inputs.S])
-                self.F_io = self.F_io.select_dtypes(include=['float']).apply(pd.to_numeric, downcast='float')
-                c_emissions = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
-                                            'Q_emission')
-                c_emissions.columns = self.IO_database.emissions.S.index
-                c_emissions = c_emissions.drop(c_emissions.index[0])
-                c_factorinputs = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
-                                               'Q_factorinputs')
-                c_factorinputs.columns = self.IO_database.factor_inputs.S.index
-                c_factorinputs = c_factorinputs.drop(c_factorinputs.index[0])
-                c_materials = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
-                                            'Q_materials')
-                c_materials.columns = self.IO_database.materials.S.index
-                c_materials = c_materials.drop(c_materials.index[0])
-                c_resources = pd.read_excel(path_to_io_database + 'characterisation_CREEA_version2.2.2.xlsx',
-                                            'Q_resources')
-                c_resources.columns = self.IO_database.resources.S.index
-                c_resources = c_resources.drop(c_resources.index[0])
-                c_emissions.index = c_emissions.index.values
-                c_emissions.columns = c_emissions.columns.values
-                c_resources.columns = c_resources.columns.values
-                self.C_io = pd.concat([c_emissions, c_materials, c_resources, c_factorinputs], sort=False)
-                self.C_io = self.C_io.fillna(0)
-                self.C_io = self.C_io.astype(dtype='float32')
-                self.STR_io = pd.DataFrame([self.IO_database.emissions.S.index.tolist(),
-                                            [i[0] for i in self.IO_database.emissions.S.index],
-                                            [i[1] for i in self.IO_database.emissions.S.index]],
-                                           index=['MATRIXID', 'FULLNAME', 'comp']).transpose()
-                self.STR_io.index = self.STR_io.MATRIXID
-                self.STR_io = self.STR_io.drop('MATRIXID', axis=1)
-
-            if version_exiobase == str(3):
-                # removing digits in the product group names of exiobase 3
-                new_index_tuple = []
-                for index in self.IO_database.A.index:
-                    if any(char.isdigit() for char in index[1]):
-                        new_index_tuple.append((index[0], index[1][:-5]))
-                    else:
-                        new_index_tuple.append(index)
-                index_without_numbers = pd.MultiIndex.from_tuples(new_index_tuple, names=['region','sector'])
-                self.A_io.index = index_without_numbers
-                self.A_io.columns = index_without_numbers
-
-                self.IO_database.calc_all()
-                self.F_io = self.IO_database.satellite.S
-                # emissions for millions of euros, we want them in euros, except value added
-                for_update = self.IO_database.satellite.S.loc[self.IO_database.satellite.unit[
-                    self.IO_database.satellite.unit != 'M.EUR'].dropna().index]/1000000
-                self.F_io.update(for_update)
-                self.F_io.columns = index_without_numbers
-                self.F_io = self.F_io.astype(dtype='float32')
-
-                self.C_io = pd.concat([pd.read_excel(
+            self.C_io = pd.concat([pd.read_excel(
+                pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
+                'Q_emission'),
+                pd.read_excel(
                     pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
-                    'Q_emission'),
-                    pd.read_excel(
-                        pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
-                        'Q_materials'),
-                    pd.read_excel(
-                        pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
-                        'Q_resources'),
-                    pd.read_excel(
-                        pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
-                        'Q_factor_inputs')], sort=False).fillna(0)
-                self.C_io = self.C_io.astype(dtype='float32')
-                self.reference_year_IO = int(self.IO_database.meta.description[-4:])
+                    'Q_materials'),
+                pd.read_excel(
+                    pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
+                    'Q_resources'),
+                pd.read_excel(
+                    pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
+                    'Q_factor_inputs')], sort=False).fillna(0)
+            self.C_io = self.C_io.astype(dtype='float32')
+            self.reference_year_IO = int(self.IO_database.meta.description[-4:])
 
-            self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
+        self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
 
-            del self.LCA_database
-            del self.IO_database
+        del self.LCA_database
+        del self.IO_database
 
-            # STAM CATEGORIES
+        # STAM CATEGORIES
 
-            self.io_categories = ast.literal_eval(pkg_resources.resource_string( __name__,
-                    '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-                                                                                 '/STAM_categories.txt').decode(
+        self.io_categories = ast.literal_eval(pkg_resources.resource_string( __name__,
+                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
+                                                                             '/STAM_categories.txt').decode(
+            'utf-8'))
+        self.categories_same_functionality = ast.literal_eval(
+            pkg_resources.resource_string(
+                __name__,
+                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/STAM_functional_categories.txt').decode(
                 'utf-8'))
-            self.categories_same_functionality = ast.literal_eval(
-                pkg_resources.resource_string(
-                    __name__,
-                    '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/STAM_functional_categories.txt').decode(
-                    'utf-8'))
 
-            # GEOGRAPHY CONCORDANCE
+        # GEOGRAPHY CONCORDANCE
 
-            self.listcountry = ast.literal_eval(
-                pkg_resources.resource_string(
-                    __name__,
-                    '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/countries.txt').decode(
-                    'utf-8'))
-            self.listregions = ast.literal_eval(
-                pkg_resources.resource_string(
-                    __name__,
-                    '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/regions.txt').decode(
-                    'utf-8'))
-            self.countries_per_regions = ast.literal_eval(
-                pkg_resources.resource_string(
-                    __name__,
-                    '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-                    '/countries_per_regions.txt').decode('utf-8'))
-            self.replacements1 = ast.literal_eval(pkg_resources.resource_string(
+        self.listcountry = ast.literal_eval(
+            pkg_resources.resource_string(
+                __name__,
+                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/countries.txt').decode(
+                'utf-8'))
+        self.listregions = ast.literal_eval(
+            pkg_resources.resource_string(
+                __name__,
+                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/regions.txt').decode(
+                'utf-8'))
+        self.countries_per_regions = ast.literal_eval(
+            pkg_resources.resource_string(
                 __name__,
                 '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-                '/geography_replacements_regions.txt').decode('utf-8'))
-            self.replacements2 = ast.literal_eval(pkg_resources.resource_string(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-                '/geography_replacements_other.txt').decode('utf-8'))
-            self.replacements3 = ast.literal_eval(pkg_resources.resource_string(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-                '/geography_replacements_RoW.txt').decode('utf-8'))
+                '/countries_per_regions.txt').decode('utf-8'))
+        self.replacements1 = ast.literal_eval(pkg_resources.resource_string(
+            __name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
+            '/geography_replacements_regions.txt').decode('utf-8'))
+        self.replacements2 = ast.literal_eval(pkg_resources.resource_string(
+            __name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
+            '/geography_replacements_other.txt').decode('utf-8'))
+        self.replacements3 = ast.literal_eval(pkg_resources.resource_string(
+            __name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
+            '/geography_replacements_RoW.txt').decode('utf-8'))
 
-            self.PRO_f['io_geography'] = self.PRO_f.geography.copy()
-            self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements1, regex=True)
-            self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements2, regex=True)
-            self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements3, regex=True)
-            # cannot replace these normally because they alter the existing regions of ecoinvent3.5
-            if version_ecoinvent == str(3.5):
-                self.PRO_f.io_geography[[
-                    i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['ER', 'NA', 'TN']]] = 'WF'
-                self.PRO_f.io_geography[
-                    [i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['NI', 'AR']]] = 'WL'
-                if version_exiobase == 2:
-                    self.PRO_.io_geography[self.PRO_f.io_geography == 'HR'] = 'WE'
+        self.PRO_f['io_geography'] = self.PRO_f.geography.copy()
+        self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements1, regex=True)
+        self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements2, regex=True)
+        self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements3, regex=True)
+        # cannot replace these normally because they alter the existing regions of ecoinvent3.5
+        if version_ecoinvent == str(3.5):
+            self.PRO_f.io_geography[[
+                i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['ER', 'NA', 'TN']]] = 'WF'
+            self.PRO_f.io_geography[
+                [i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['NI', 'AR']]] = 'WL'
+            if version_exiobase == 2:
+                self.PRO_.io_geography[self.PRO_f.io_geography == 'HR'] = 'WE'
 
-            # PRODUCT CONCORDANCE
+        # PRODUCT CONCORDANCE
 
-            exceptions = pd.read_excel(pkg_resources.resource_stream(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
-                'Exceptions')
-            concordance = pd.read_excel(pkg_resources.resource_stream(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
-                'Concordance per product')
-            convert_sector_code = pd.read_excel(pkg_resources.resource_stream(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
-                'Description_Exiobase')
+        exceptions = pd.read_excel(pkg_resources.resource_stream(
+            __name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
+            'Exceptions')
+        concordance = pd.read_excel(pkg_resources.resource_stream(
+            __name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
+            'Concordance per product')
+        convert_sector_code = pd.read_excel(pkg_resources.resource_stream(
+            __name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
+            'Description_Exiobase')
 
-            exceptions.index = exceptions.UUID
-            concordance = concordance.drop(['activityName', 'productName'], 1)
-            self.PRO_f = self.PRO_f.merge(concordance, 'outer')
-            self.PRO_f.index = self.PRO_f.activityId + '_' + self.PRO_f.productId
-            self.PRO_f.Concordance.update(exceptions.Concordance)
-            # convert exiobase codes (e.g. p01) to names of the sectors (e.g. 'Paddy rice')
-            self.PRO_f = self.PRO_f.merge(convert_sector_code, left_on='Concordance', right_on='EXIO_code', how='left')
-            self.PRO_f = self.PRO_f.drop(['Concordance', 'EXIO_code'], axis=1)
-            self.PRO_f.index = self.PRO_f.activityId + '_' + self.PRO_f.productId
-            # We want the indexes of PRO_f and A_ff in the same order
-            self.PRO_f = self.PRO_f.reindex(self.A_ff.index)
+        exceptions.index = exceptions.UUID
+        concordance = concordance.drop(['activityName', 'productName'], 1)
+        self.PRO_f = self.PRO_f.merge(concordance, 'outer')
+        self.PRO_f.index = self.PRO_f.activityId + '_' + self.PRO_f.productId
+        self.PRO_f.Concordance.update(exceptions.Concordance)
+        # convert exiobase codes (e.g. p01) to names of the sectors (e.g. 'Paddy rice')
+        self.PRO_f = self.PRO_f.merge(convert_sector_code, left_on='Concordance', right_on='EXIO_code', how='left')
+        self.PRO_f = self.PRO_f.drop(['Concordance', 'EXIO_code'], axis=1)
+        self.PRO_f.index = self.PRO_f.activityId + '_' + self.PRO_f.productId
+        # We want the indexes of PRO_f and A_ff in the same order
+        self.PRO_f = self.PRO_f.reindex(self.A_ff.index)
 
-            # LOADING THE FILTER
+        # LOADING THE FILTER
 
-            self.list_to_hyb = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'Hybridized').index.tolist()
-            self.listmarket = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'Market').index.tolist()
-            self.listnottransacted = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'Not commercialized').index.tolist()
-            self.listguillotine = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'Poor quality').index.tolist()
-            self.dummyprocesses = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'Empty processes').index.tolist()
-            self.null_price = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'No price').index.tolist()
-            self.list_uncovered_geographies = pd.read_excel(pkg_resources.resource_stream(
-                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-                'Uncovered geography').index.tolist()
-            self.list_not_to_hyb = (
-                    self.listmarket + self.listnottransacted + self.listguillotine + self.dummyprocesses
-                    + self.null_price + self.list_uncovered_geographies)
+        self.list_to_hyb = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'Hybridized').index.tolist()
+        self.listmarket = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'Market').index.tolist()
+        self.listnottransacted = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'Not commercialized').index.tolist()
+        self.listguillotine = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'Poor quality').index.tolist()
+        self.dummyprocesses = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'Empty processes').index.tolist()
+        self.null_price = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'No price').index.tolist()
+        self.list_uncovered_geographies = pd.read_excel(pkg_resources.resource_stream(
+            __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
+            'Uncovered geography').index.tolist()
+        self.list_not_to_hyb = (
+                self.listmarket + self.listnottransacted + self.listguillotine + self.dummyprocesses
+                + self.null_price + self.list_uncovered_geographies)
 
-            self.qualitychecks()
+        self.read_template()
 
-            self.read_template()
+        self.qualitychecks()
 
-            return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
-                         F_io=self.F_io,
-                         F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io,
-                         STR_f=self.STR_f,
-                         STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
-                         countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
-                         number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
-                         number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
-                         list_not_to_hyb=self.list_not_to_hyb, listmarket=self.listmarket,
-                         dummyprocesses=self.dummyprocesses, listnottransacted=self.listnottransacted,
-                         null_price=self.null_price, listguillotine=self.listguillotine,
-                         list_uncovered_geographies=self.list_uncovered_geographies,
-                         io_categories=self.io_categories,
-                         categories_same_functionality=self.categories_same_functionality,
-                         lca_database_name_and_version=self.lca_database_name_and_version,
-                         io_database_name_and_version=self.io_database_name_and_version)
+        return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
+                     F_io=self.F_io,
+                     F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io,
+                     STR_f=self.STR_f,
+                     STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
+                     countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
+                     number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
+                     number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
+                     list_not_to_hyb=self.list_not_to_hyb, listmarket=self.listmarket,
+                     dummyprocesses=self.dummyprocesses, listnottransacted=self.listnottransacted,
+                     null_price=self.null_price, listguillotine=self.listguillotine,
+                     list_uncovered_geographies=self.list_uncovered_geographies,
+                     io_categories=self.io_categories,
+                     categories_same_functionality=self.categories_same_functionality,
+                     lca_database_name_and_version=self.lca_database_name_and_version,
+                     io_database_name_and_version=self.io_database_name_and_version)
 
     def read_template(self):
         template_foreground_metadata = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
                                                       '/Template.xlsx'), 'Metadata_foreground'))
         template_foreground_exchanges = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
                                                       '/Template.xlsx'), 'unit_processes_exchanges')).ffill()
+        for new_process_to_hybridize in [i for i in template_foreground_metadata.index
+                                         if template_foreground_metadata.to_hybridize[i] == 'yes']:
+            self.list_to_hyb.append(new_process_to_hybridize)
+        for new_process_not_to_hybridize in [i for i in template_foreground_metadata.index
+                                         if template_foreground_metadata.to_hybridize[i] == 'no']:
+            self.list_not_to_hyb.append(new_process_not_to_hybridize)
+        for new_process_not_to_hybridize in [i for i in template_foreground_metadata.index
+                                         if str(template_foreground_metadata.to_hybridize[i]) == 'nan']:
+            self.list_not_to_hyb.append(new_process_not_to_hybridize)
+        template_foreground_metadata.drop('to_hybridize', axis=1, inplace=True)
         self.PRO_f = pd.concat([self.PRO_f, template_foreground_metadata], sort=False)
         for process_to_add in template_foreground_metadata.index:
             self.add_process_to_matrices(process_to_add)
@@ -501,6 +453,8 @@ class DatabaseLoader:
         self.A_ff[index] = 0
         self.A_ff = pd.concat([self.A_ff, pd.DataFrame(0, columns=self.A_ff.columns, index=[index])], sort=False)
         self.F_f[index] = 0
+        self.y_f[index] = 0
+        self.y_f.loc[index, index] = 1
 
     def LCA_convention_to_IO(self, dataframe):
         """ Changes the convetion of an LCA technology matrix from LCA to IO """
@@ -509,122 +463,6 @@ class DatabaseLoader:
         # only positive values
         dataframe = dataframe.abs()
         return dataframe
-
-    def add_process_to_ecoinvent(self):
-        """function to add new processes to ecoinvent"""
-
-        activityName = input('Enter the activityName of the process to add : ')
-        productName = input('Enter the name of the product of the process to add : ')
-        Price = input('Enter the price of the product of the process : ')
-        unitname = input('Enter the unit name of the process : ')
-        hybrid_geography = input('Enter the geography with which to hybridize the process : ')
-        while hybrid_geography not in self.listcountry and hybrid_geography not in self.listregions:
-            hybrid_geography = input('The geography you entered does not exist. '
-                                     'Enter the geography with which to hybridize the process : ')
-        productgroup = input('Enter the product group with which to hybridize the process : ')
-        while productgroup not in self.A_io.index.levels[1]:
-            productgroup = input('The product group you entered does not exist. '
-                                 'Enter the product group with which to hybridize the process : ')
-        hybridize = input('Do you want to hybridize the process (yes or no)?')
-        while hybridize != 'yes' and hybridize != 'yeah' and hybridize != 'no' and hybridize != 'nope':
-            hybridize = input('Do you want to hybridize the process (yes or no)?')
-        activityId = str(uuid.uuid4())
-        productId = str(uuid.uuid4())
-        activityNameId = str(uuid.uuid4())
-        boo = pd.DataFrame([activityId, productId, activityName, '', Price, 'EUR2005', '', '', 'Current',
-                            'Business-as-Usual', '', '', '', productName, unitname, '', activityNameId, '',
-                            '', '', hybrid_geography, productgroup],
-                           index=self.PRO_f.columns, columns=[activityId + '_' + productId]).transpose()
-        self.PRO_f = pd.concat([self.PRO_f, boo])
-        self.A_ff[activityId + '_' + productId] = pd.DataFrame(0.0, columns=[activityId + '_' + productId],
-                                                               index=self.PRO_f.index)
-        self.A_ff = self.A_ff.append(pd.DataFrame(0.0, index=[activityId + '_' + productId], columns=self.A_ff.columns))
-
-        self.A_io_f[activityId + '_' + productId] = pd.DataFrame(0.0, columns=[activityId + '_' + productId],
-                                                                 index=self.A_io_f.index)
-        self.A_io_f = (self.A_io_f.transpose().reindex(self.A_ff.columns)).transpose()
-
-        self.F_f[activityId + '_' + productId] = pd.DataFrame(0.0, columns=[activityId + '_' + productId],
-                                                              index=self.F_f.index)
-
-        if hybridize == 'yes' or hybridize == 'y' or hybridize == 'yeah':
-            self.list_to_hyb.append(activityId + '_' + productId)
-        elif hybridize == 'no' or hybridize == 'nope':
-            self.list_not_to_hyb.append(activityId + '_' + productId)
-
-        self.listcreated.append([activityName, activityId + '_' + productId])
-
-        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                                        self.lca_database_name_and_version + '_' +
-                                                                        self.io_database_name_and_version)):
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                     self.lca_database_name_and_version + '_' +
-                                                     self.io_database_name_and_version))
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                     self.lca_database_name_and_version + '_' +
-                                                     self.io_database_name_and_version) + '/__init__.py')
-
-        df = self.PRO_f.join(pd.DataFrame(self.A_ff.loc[activityId + '_' + productId])).loc[:, ['geography',
-                                                                                                'activityName',
-                                                                                                'productName',
-                                                                                                activityId + '_' +
-                                                                                                productId]]
-        df.to_excel(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                    self.lca_database_name_and_version + '_' +
-                                                    self.io_database_name_and_version +
-                                                    '/adding_process.xlsx'))
-
-    def load_added_process(self):
-
-        df = pd.read_excel(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                           self.lca_database_name_and_version + '_' +
-                                                           self.io_database_name_and_version +
-                                                           '/adding_process.xlsx'))
-        df = df.drop(['geography', 'activityName', 'productName'], axis=1)
-        self.A_ff.update(df)
-
-        return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f, F_io=self.F_io,
-                     F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f,
-                     STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
-                     countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
-                     number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
-                     number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
-                     list_not_to_hyb=self.list_not_to_hyb, listmarket=self.listmarket,
-                     dummyprocesses=self.dummyprocesses, listnottransacted=self.listnottransacted,
-                     null_price=self.null_price, listguillotine=self.listguillotine,
-                     io_categories=self.io_categories)
-
-    def save_added_processes(self):
-        package = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f, 'F_f': self.F_f,
-                   'F_io': self.F_io, 'F_io_f': self.F_io_f, 'y_io': self.y_io, 'y_f': self.y_f, 'C_f': self.C_f,
-                   'C_io': self.C_io, 'STR_f': self.STR_f, 'STR_io': self.STR_io, 'listcountry': self.listcountry,
-                   'listregions': self.listregions, 'countries_per_regions': self.countries_per_regions,
-                   'reference_year_IO': self.reference_year_IO, 'number_of_countries_IO': self.number_of_countries_IO,
-                   'number_of_RoW_IO': self.number_of_RoW_IO, 'number_of_products_IO': self.number_of_products_IO,
-                   'list_to_hyb': self.list_to_hyb, 'list_not_to_hyb': self.list_not_to_hyb,
-                   'listmarket': self.listmarket, 'dummyprocesses': self.dummyprocesses,
-                   'listnottransacted': self.listnottransacted, 'null_price': self.null_price,
-                   'listguillotine': self.listguillotine, 'io_categories': self.io_categories,
-                   'categories_same_functionality': self.categories_same_functionality,
-                   'created_processes': self.listcreated}
-
-        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/ecoinvent_with_added_processes')):
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/ecoinvent_with_added_processes'))
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/ecoinvent_with_added_processes/__init__.py'))
-
-        with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                  '/ecoinvent_with_added_processes/' +
-                                                                  self.lca_database_name_and_version +
-                                                                  '.pickle')), 'wb') as f:
-            pickle.dump(package, f)
-
-    def filter_productName_ecoinvent(self, productName):
-        """ Quickly identifies processes from ecoinvent depending on their products"""
-
-        for i in range(0, len(self.PRO_f)):
-            if productName in self.PRO_f.productName[i]:
-                print('productName is: ', self.PRO_f.productName[i], '/ activityName is: ', self.PRO_f.activityName[i],
-                      '/ geography is: ', self.PRO_f.geography[i], '/ UUID is: ', self.PRO_f.index[i])
 
     def qualitychecks(self):
         """ Several quality checks to ensure that data entered by the user in the numerous excel and text files
@@ -682,14 +520,14 @@ class DatabaseLoader:
             raise Exception('A process to hybridize is not matched to any product group')
         if len([geo for geo in self.PRO_f.io_geography if (geo not in self.A_io.index.levels[0]
                                                        and geo not in self.listregions
-                                                       and geo!='RoW'
+                                                       and geo != 'RoW'
                                                       )]) != 0:
             raise Exception('A geography supposed to be used to hybridize processes is not included in the IO database')
         if not len(set(self.PRO_f.index.tolist())) == len(self.PRO_f.index.tolist()):
             raise Exception('Duplicate in the indexes of PRO_f')
         if self.A_ff.isnull().any().any():
             raise Exception('NaN values in A_ff')
-        if not self.A_ff[self.A_ff<0].isna().all().all():
+        if not self.A_ff[self.A_ff < 0].isna().all().all():
             raise Exception('Negative values in A_ff')
         if not (self.A_ff.index == self.PRO_f.index).all():
             raise Exception('A_ff and PRO_f do not have the same index')
@@ -697,11 +535,6 @@ class DatabaseLoader:
             raise Exception('A_ff indexes and columns are not identical')
         if not len(self.list_to_hyb)+len(self.list_not_to_hyb) == len(self.PRO_f):
             raise Exception('Some processes are neither in list_to_hyb nor list_not_to_hyb')
-        if not len(self.list_not_to_hyb) == (len(self.listmarket)+len(self.dummyprocesses)+len(self.null_price)+
-                                             len(self.listnottransacted)+len(self.list_uncovered_geographies)+
-                                             len(self.listguillotine)):
-            raise Exception('The elements of list_not_to_hyb do not match with more accurate not-to-hyb classifications '
-                            '(e.g., listmarket, listnottransacted, etc.)')
         if not (self.F_f.index.tolist().sort() == self.C_f.columns.tolist().sort()):
             raise Exception('Rows of F_f must match with columns of C_f')
         if not (self.F_io.index.tolist().sort() == self.C_io.columns.tolist().sort()):
@@ -1553,6 +1386,7 @@ def extract_version_from_name(name_database):
         except ValueError:
             pass
 
+
 def get_inflation(reference_year):
     """ Returns the inflation rate between the year 2005 (base year for ecoinvent prices) and the reference year of
     the used IO database"""
@@ -1596,6 +1430,7 @@ def get_inflation(reference_year):
 
     return inflation
 
+
 def sum_elements_list(liste):
     concatenated_list = []
     for i in range(0,len(liste)):
@@ -1604,6 +1439,7 @@ def sum_elements_list(liste):
         else:
             concatenated_list += [liste[i]]
     return concatenated_list
+
 
 def template_sheet_treatment(dataframe):
     """ Removes empty rows and potential typos created Unnamed columns in the template """
