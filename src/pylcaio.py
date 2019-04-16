@@ -390,10 +390,8 @@ class DatabaseLoader:
 
         self.qualitychecks()
 
-        return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f,
-                     F_io=self.F_io,
-                     F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io,
-                     STR_f=self.STR_f,
+        return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f, F_io=self.F_io,
+                     F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f,
                      STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
                      countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
                      number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
@@ -401,8 +399,7 @@ class DatabaseLoader:
                      list_not_to_hyb=self.list_not_to_hyb, listmarket=self.listmarket,
                      dummyprocesses=self.dummyprocesses, listnottransacted=self.listnottransacted,
                      null_price=self.null_price, listguillotine=self.listguillotine,
-                     list_uncovered_geographies=self.list_uncovered_geographies,
-                     io_categories=self.io_categories,
+                     list_uncovered_geographies=self.list_uncovered_geographies, io_categories=self.io_categories,
                      categories_same_functionality=self.categories_same_functionality,
                      lca_database_name_and_version=self.lca_database_name_and_version,
                      io_database_name_and_version=self.io_database_name_and_version)
@@ -411,7 +408,7 @@ class DatabaseLoader:
         template_foreground_metadata = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
                                                       '/Template.xlsx'), 'Metadata_foreground'))
         template_foreground_exchanges = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
-                                                      '/Template.xlsx'), 'unit_processes_exchanges')).ffill()
+                                                      '/Template.xlsx'), 'Unit_processes_exchanges')).ffill()
         for new_process_to_hybridize in [i for i in template_foreground_metadata.index
                                          if template_foreground_metadata.to_hybridize[i] == 'yes']:
             self.list_to_hyb.append(new_process_to_hybridize)
