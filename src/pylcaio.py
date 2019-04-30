@@ -171,16 +171,12 @@ class DatabaseLoader:
 
         self.PRO_f = self.LCA_database['PRO'].copy()
         self.PRO_f.price = self.PRO_f.price.fillna(0)
-        self.A_ff = self.LCA_database['A'].copy().fillna(0.0)
-        # check if there are some unwanted negative values lurking in the LCA database matrix
-        a_ff_copy = self.A_ff.copy()
-        a_ff_copy[a_ff_copy > 0] = 0
-        self.A_ff = self.A_ff + (-2) * a_ff_copy
+        self.A_ff = self.LCA_database['A'].copy()
         self.A_ff = self.A_ff.astype(dtype='float32')
         self.A_io = self.IO_database.A.copy()
         self.A_io = self.A_io.astype(dtype='float32')
-        self.A_io_f = pd.DataFrame(0.0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
-        self.F_f = self.LCA_database['F'].copy().fillna(0.0)
+        self.A_io_f = pd.DataFrame(0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
+        self.F_f = self.LCA_database['F'].copy()
         self.F_f = self.F_f.astype(dtype='float32')
         self.y_io = self.IO_database.Y.copy()
         self.y_io = self.y_io.astype(dtype='float32')
@@ -247,7 +243,6 @@ class DatabaseLoader:
             self.A_io.index = index_without_numbers
             self.A_io.columns = index_without_numbers
             self.y_io.index = index_without_numbers
-
             self.IO_database.calc_all()
             self.F_io = self.IO_database.satellite.S
             # emissions for millions of euros, we want them in euros, except value added
@@ -256,7 +251,6 @@ class DatabaseLoader:
             self.F_io.update(for_update)
             self.F_io.columns = index_without_numbers
             self.F_io = self.F_io.astype(dtype='float32')
-
             self.C_io = pd.concat([pd.read_excel(
                 pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
                 'Q_emission'),
@@ -279,7 +273,7 @@ class DatabaseLoader:
 
         # STAM CATEGORIES
 
-        self.io_categories = ast.literal_eval(pkg_resources.resource_string( __name__,
+        self.io_categories = ast.literal_eval(pkg_resources.resource_string(__name__,
                 '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
                                                                              '/STAM_categories.txt').decode(
             'utf-8'))
@@ -330,7 +324,7 @@ class DatabaseLoader:
             self.PRO_f.io_geography[
                 [i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['NI', 'AR']]] = 'WL'
             if version_exiobase == 2:
-                self.PRO_.io_geography[self.PRO_f.io_geography == 'HR'] = 'WE'
+                self.PRO_f.io_geography[self.PRO_f.io_geography == 'HR'] = 'WE'
 
         # PRODUCT CONCORDANCE
 
@@ -420,6 +414,7 @@ class DatabaseLoader:
             self.list_not_to_hyb.append(new_process_not_to_hybridize)
         template_foreground_metadata.drop('to_hybridize', axis=1, inplace=True)
         self.PRO_f = pd.concat([self.PRO_f, template_foreground_metadata], sort=False)
+
         for process_to_add in template_foreground_metadata.index:
             self.add_process_to_matrices(process_to_add)
 
@@ -427,7 +422,7 @@ class DatabaseLoader:
                                                                     template_foreground_exchanges.input_output[
                                                                         i] in self.PRO_f.index]]
         pivot1 = pd.pivot_table(technosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
-                            values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum, fill_value=0)
+                            values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum)
         del pivot1.index.name
         del pivot1.columns.name
         pivot1 = self.LCA_convention_to_IO(pivot1)
@@ -438,8 +433,7 @@ class DatabaseLoader:
                                                                         i] in self.STR_f.index]]
 
         pivot2 = pd.pivot_table(biosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
-                                values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum,
-                                fill_value=0)
+                                values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum)
         del pivot2.index.name
         del pivot2.columns.name
         pivot2 = self.LCA_convention_to_IO(pivot2)
