@@ -656,6 +656,8 @@ class LCAIO:
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
 
+        self.double_counting = ''
+        self.capitals = ''
         self.description = []
 
         allowed_keys = list(self.__dict__.keys())
@@ -663,7 +665,7 @@ class LCAIO:
 
     # ----------------------------CORE METHOD-------------------------------------
 
-    def hybridize(self, method_double_counting, capitals_method):
+    def hybridize(self, method_double_counting, capitals_method=False):
         """
         Hybridize the LCA database with the IO database
 
@@ -787,6 +789,7 @@ class LCAIO:
 
             self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
 
+            self.double_counting = 'binary'
             self.description.append('binary')
 
         elif method_double_counting == 'STAM':
@@ -822,13 +825,15 @@ class LCAIO:
                 gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.A_io_f_uncorrected)))
             self.A_io_f = self.A_io_f.astype(dtype='float32')
 
+            self.double_counting = 'STAM'
             self.description.append('STAM')
 
         if capitals_method == 'LCA':
             self.description.append('Capitals endogenized prioritizing LCA capitals over IO')
+            self.capitals = 'LCA'
             pass
 
-        if capitals_method == 'IO':
+        elif capitals_method == 'IO':
             # We use the concordance to determine which processes of ecoinvent are capitals
             capitals = ['Cattle', 'Construction work', 'Electrical machinery and apparatus n.e.c.',
                         'Machinery and equipment n.e.c.',
@@ -848,7 +853,12 @@ class LCAIO:
             self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
             self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
 
+            self.capitals = 'IO'
             self.description.append('Capitals endogenized prioritizing IO capitals over LCA')
+
+        elif not capitals_method:
+            self.capitals = False
+            self.description.append('Capitals were not endogenized')
 
     # ---------------------PREPARATIONS FOR THE HYBRIDIZATION----------------------
 
@@ -1044,34 +1054,140 @@ class LCAIO:
 
     # -------------------------- EXPORT RESULTS -----------------------------------
 
-    def save_system(self, file_format):
-        """ Export the hybridized database to either dataframe via pickle or to csv files
+    def save_system(self):
+        """ Export the hybridized database to either dataframe via pickle """
 
-        Args:
-        ----
-             * file_format  : choose the format in which to export the results ('pickle' or 'csv')
-        """
-
-        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/')):
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/'))
-        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/__init__.py')):
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/__init__.py'))
-
-        if file_format == 'pickle':
-
-            hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+        hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                              'F_f': self.F_f, 'F_io': self.F_io, 'F_io_f': self.F_io_f,
                              'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io, 'K_io_f': self.K_io_f,
                              'list_to_hyb': self.list_to_hyb, 'description': self.description}
 
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
+        if self.capitals == 'IO' and self.double_counting == 'STAM':
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_IO_capitals_STAM/')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_IO_capitals_STAM/'))
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_IO_capitals_STAM/__init__.py')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_IO_capitals_STAM/__init__.py'))
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                       self.lca_database_name_and_version + '_' +
                                                                       self.io_database_name_and_version +
-                                                                      '_hybrid_system.pickle')), 'wb') as f:
+                                                                      '_IO_capitals_STAM/hybrid_system.pickle')),
+                           'wb') as f:
                 pickle.dump(hybrid_system, f)
-
-        else:
-            print('Enter a file format')
+        elif self.capitals == 'IO' and self.double_counting == 'binary':
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_IO_capitals_binary/')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_IO_capitals_binary/'))
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_IO_capitals_binary/__init__.py')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_IO_capitals_binary/__init__.py'))
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_IO_capitals_binary/hybrid_system.pickle')),
+                           'wb') as f:
+                pickle.dump(hybrid_system, f)
+        elif self.capitals == 'LCA' and self.double_counting == 'STAM':
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_LCA_capitals_STAM/')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_LCA_capitals_STAM/'))
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_LCA_capitals_STAM/__init__.py')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_LCA_capitals_STAM/__init__.py'))
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_LCA_capitals_STAM/hybrid_system.pickle')),
+                           'wb') as f:
+                pickle.dump(hybrid_system, f)
+        elif self.capitals == 'LCA' and self.double_counting == 'binary':
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_LCA_capitals_binary/')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_LCA_capitals_binary/'))
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_LCA_capitals_binary/__init__.py')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_LCA_capitals_binary/__init__.py'))
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_LCA_capitals_binary/hybrid_system.pickle')),
+                           'wb') as f:
+                pickle.dump(hybrid_system, f)
+        elif not self.capitals and self.double_counting == 'STAM':
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_no_capitals_STAM/')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_no_capitals_STAM/'))
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_no_capitals_STAM/__init__.py')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_no_capitals_STAM/__init__.py'))
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_no_capitals_STAM/hybrid_system.pickle')),
+                           'wb') as f:
+                pickle.dump(hybrid_system, f)
+        elif not self.capitals and self.double_counting == 'binary':
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_no_capitals_binary/')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_no_capitals_binary/'))
+            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                            self.lca_database_name_and_version + '_' +
+                                                                            self.io_database_name_and_version +
+                                                                            '_no_capitals_binary/__init__.py')):
+                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+                                                         '_' + self.io_database_name_and_version +
+                                                         '_no_capitals_binary/__init__.py'))
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_no_capitals_binary/hybrid_system.pickle')),
+                           'wb') as f:
+                pickle.dump(hybrid_system, f)
 
 
 class Analysis:
@@ -1093,16 +1209,66 @@ class Analysis:
 
     """
 
-    def __init__(self, lca_database_name_and_version, io_database_name_and_version):
+    def __init__(self, lca_database_name_and_version, io_database_name_and_version, method_double_counting,
+                 capitals_method=False):
 
         self.lca_database_name_and_version = lca_database_name_and_version
         self.io_database_name_and_version = io_database_name_and_version
 
-        with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                                  self.lca_database_name_and_version + '_' +
-                                                                  self.io_database_name_and_version +
-                                                                  '_hybrid_system.pickle')), 'rb') as f:
-            self.hybrid_system = pd.read_pickle(f)
+        if capitals_method == 'IO' and method_double_counting == 'STAM':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_IO_capitals_STAM/hybrid_system.pickle')),
+                           'rb') as f:
+                self.hybrid_system = pd.read_pickle(f)
+            self.capitals = 'IO'
+            self.double_counting = 'STAM'
+        elif capitals_method == 'IO' and method_double_counting == 'binary':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_IO_capitals_binary/hybrid_system.pickle')),
+                           'rb') as f:
+                self.hybrid_system = pd.read_pickle(f)
+            self.capitals = 'IO'
+            self.double_counting = 'binary'
+        elif capitals_method == 'LCA' and method_double_counting == 'STAM':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_LCA_capitals_STAM/hybrid_system.pickle')),
+                           'rb') as f:
+                self.hybrid_system = pd.read_pickle(f)
+            self.capitals = 'LCA'
+            self.double_counting = 'STAM'
+        elif capitals_method == 'LCA' and method_double_counting == 'binary':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_LCA_capitals_binary/hybrid_system.pickle')),
+                           'rb') as f:
+                self.hybrid_system = pd.read_pickle(f)
+            self.capitals = 'LCA'
+            self.double_counting = 'binary'
+        elif not capitals_method and method_double_counting == 'STAM':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_no_capitals_STAM/hybrid_system.pickle')),
+                           'rb') as f:
+                self.hybrid_system = pd.read_pickle(f)
+            self.capitals = 'no'
+            self.double_counting = 'STAM'
+        elif not capitals_method and method_double_counting == 'binary':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_no_capitals_binary/hybrid_system.pickle')),
+                           'rb') as f:
+                self.hybrid_system = pd.read_pickle(f)
+            self.capitals = 'no'
+            self.double_counting = 'binary'
 
         self.PRO_f = self.hybrid_system['PRO_f']
         self.A_ff = self.hybrid_system['A_ff']
@@ -1307,8 +1473,12 @@ class Analysis:
         name_impact_categories = self.check_impact_category(impact_category)
 
         if type_of_analysis == 'total':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_AK.pickle')),
-                           'rb') as f:
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_' + self.capitals + '_capitals_' +
+                                                                      self.double_counting + '/L_AK.pickle')),
+                           'wb') as f:
                 self.L_AK = pd.read_pickle(f)
 
             X = self.L_AK.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
@@ -1316,20 +1486,29 @@ class Analysis:
                                                       self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
 
         elif type_of_analysis == 'on_capitals_only':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_K.pickle')),
-                           'rb') as f:
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_' + self.capitals + '_capitals_' +
+                                                                      self.double_counting + '/L_K.pickle')),
+                           'wb') as f:
                 self.L_K = pd.read_pickle(f)
 
             X = self.L_K.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                      self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
 
         elif type_of_analysis == 'without_capitals':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_A.pickle')),
-                           'rb') as f:
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_' + self.capitals + '_capitals_' +
+                                                                      self.double_counting + '/L_A.pickle')),
+                           'wb') as f:
                 self.L_A = pd.read_pickle(f)
 
             X = self.L_A.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                      self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+
         else:
             print('Enter the type_of_analysis desided')
             return
@@ -1386,11 +1565,6 @@ class Analysis:
 
     def calc_Leontief_inverses(self, matrix):
 
-        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/')):
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/'))
-        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/__init__.py')):
-            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/__init__.py'))
-
         if matrix == 'L_A':
             a = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
@@ -1399,7 +1573,11 @@ class Analysis:
             invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - a)
             invert = invert.astype('float32')
 
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_A.pickle')),
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_' + self.capitals + '_capitals_' +
+                                                                      self.double_counting + '/L_A.pickle')),
                            'wb') as f:
                 pickle.dump(invert, f)
 
@@ -1411,7 +1589,11 @@ class Analysis:
             invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - k)
             invert = invert.astype('float32')
 
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_K.pickle')),
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_' + self.capitals + '_capitals_' +
+                                                                      self.double_counting + '/L_K.pickle')),
                            'wb') as f:
                 pickle.dump(invert, f)
 
@@ -1424,7 +1606,11 @@ class Analysis:
             invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - ak)
             invert = invert.astype('float32')
 
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_AK.pickle')),
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                      self.lca_database_name_and_version + '_' +
+                                                                      self.io_database_name_and_version +
+                                                                      '_' + self.capitals + '_capitals_' +
+                                                                      self.double_counting + '/L_AK.pickle')),
                            'wb') as f:
                 pickle.dump(invert, f)
 
