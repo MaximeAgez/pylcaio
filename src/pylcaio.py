@@ -655,6 +655,8 @@ class LCAIO:
         self.H = pd.DataFrame()
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
+        self.list_of_capital_sectors = ast.literal_eval(pkg_resources.resource_string(
+            __name__, '/Data/List_of_capitals_goods.txt').decode('utf-8'))
 
         self.double_counting = ''
         self.capitals = ''
@@ -828,27 +830,37 @@ class LCAIO:
             self.double_counting = 'STAM'
             self.description.append('STAM')
 
-        if capitals_method == 'LCA':
-            self.description.append('Capitals endogenized prioritizing LCA capitals over IO')
-            self.capitals = 'LCA'
-            pass
+        # ------ ENDOGENIZING CAPITALS ------
 
-        elif capitals_method == 'IO':
-            # We use the concordance to determine which processes of ecoinvent are capitals
-            capitals = ['Cattle', 'Construction work', 'Electrical machinery and apparatus n.e.c.',
-                        'Machinery and equipment n.e.c.',
-                        'Meat animals nec', 'Motor vehicles, trailers and semi-trailers',
-                        'Office machinery and computers',
-                        'Other transport equipment', 'Pigs', 'Poultry',
-                        'Radio, television and communication equipment and apparatus',
-                        'Medical, precision and optical instruments, watches and clocks',
-                        'Furniture; other manufactured goods n.e.c.',
-                        'Real estate services', 'Computer and related services']
+        if capitals_method == 'LCA':
             # K_io_f is defined the same as A_io_f
             self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
             self.K_io_f = self.K_io_f.astype('float32')
+
+            # the correction for double counting implies here to trust LCA capitals when present
+            lambda_filter_matrix = self.H.dot(self.A_ff_processed)
+            lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
+            lambda_filter_matrix[lambda_filter_matrix == 0] = 1
+            lambda_filter_matrix = lambda_filter_matrix.fillna(0)
+            lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
+            self.K_io_f = self.K_io_f.multiply(lambda_filter_matrix)
+
+            # Since we endogenized capitals we need to remove them from both final demand and factors of production
+            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
+            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
+
+            self.description.append('Capitals endogenized prioritizing LCA capitals over IO')
+            self.capitals = 'LCA'
+
+        elif capitals_method == 'IO':
+            # K_io_f is defined the same as A_io_f
+            self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+            self.K_io_f = self.K_io_f.astype('float32')
+
             # the correction for double counting implies here to only trust IO capital and not LCA's
-            self.A_ff.loc[[i for i in self.PRO_f.index if self.PRO_f.ProductTypeName[i] in capitals], :] = 0
+            self.A_ff.loc[[i for i in self.PRO_f.index if self.PRO_f.ProductTypeName[i] in
+                           self.list_of_capital_sectors], :] = 0
+
             # Since we endogenized capitals we need to remove them from both final demand and factors of production
             self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
             self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
@@ -1334,7 +1346,7 @@ class Analysis:
             c = c.reindex(self.F.index)
         return c
 
-    def calc_lifecycle(self, capitals=True, stage='impacts'):
+    def calc_lifecycle(self, capitals=True):
         """ Simply calculates lifecycle production, emissions, or impacts
 
         Args
@@ -1351,42 +1363,30 @@ class Analysis:
         """
 
         if capitals:
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_AK.pickle')),
-                           'rb') as f:
-                self.L_AK = pd.read_pickle(f)
-            x = self.L_AK.dot(self.y)
+            import time
+            start = time.time()
 
-            if stage == 'production':
-                return x
+            ak = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                 np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                axis=0)
+            x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak, self.y)
+            d = self.C.values.dot(self.F).dot(x)
+            self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
 
-            e = self.F.dot(x)
-            if stage == 'emissions':
-                return e
-
-            if stage == 'impacts':
-                d = self.C.values.dot(e)
-                self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
-                print('Calculations done! Results are contained in self.d')
+            end = time.time()
+            print(end - start)
+            print('Calculations done! Results are contained in self.d')
 
         if not capitals:
-
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_A.pickle')),
-                           'rb') as f:
-                self.L_A = pd.read_pickle(f)
-
-            x = self.L_A.dot(self.y)
-
-            if stage == 'production':
-                return x
-
-            e = self.F.dot(x)
-            if stage == 'emissions':
-                return e
-
-            if stage == 'impacts':
-                d = self.C.values.dot(e)
-                self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
-                print('Calculations done! Results are contained in self.d')
+            a = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                axis=0)
+            x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - a, self.y)
+            d = self.C.values.dot(self.F).dot(x)
+            self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
+            print('Calculations done! Results are contained in self.d')
 
     def contribution_analysis_LCA_processes(self, UUID, impact_category):
         """ Contribution analysis for the LCA part of the hybrid LCI only
@@ -1473,17 +1473,27 @@ class Analysis:
         name_impact_categories = self.check_impact_category(impact_category)
 
         if type_of_analysis == 'total':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_' + self.capitals + '_capitals_' +
-                                                                      self.double_counting + '/L_AK.pickle')),
-                           'wb') as f:
-                self.L_AK = pd.read_pickle(f)
+            # with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+            #                                                           self.lca_database_name_and_version + '_' +
+            #                                                           self.io_database_name_and_version +
+            #                                                           '_' + self.capitals + '_capitals_' +
+            #                                                           self.double_counting + '/L_AK.pickle')),
+            #                'wb') as f:
+            #     self.L_AK = pd.read_pickle(f)
 
-            X = self.L_AK.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                      self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
-                                                      self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+            # X = self.L_AK.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+            #                                           self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
+            #                                           self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+
+            ak = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                 np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                axis=0)
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak,
+                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                        self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
+                                                        self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
+                                )
 
         elif type_of_analysis == 'on_capitals_only':
             with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
