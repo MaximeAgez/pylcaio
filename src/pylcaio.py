@@ -22,13 +22,14 @@ functionality of a pyMRIO object for reading in the IO tables.
 
 import numpy as np
 import pandas as pd
+import scipy.io
 from collections import defaultdict
-import uuid
 import os
 import gzip
 import pickle
 import ast
 import pkg_resources
+import time
 
 pd.set_option('mode.chained_assignment', None)
 # pylint: disable-msg=C0103
@@ -122,6 +123,9 @@ class DatabaseLoader:
         self.STR_f = pd.DataFrame()
         self.STR_io = pd.DataFrame()
 
+        self.K_io = pd.DataFrame()
+        self.K_io_f = pd.DataFrame()
+
         self.io_categories = defaultdict(list)
         self.categories_same_functionality = []
 
@@ -152,6 +156,9 @@ class DatabaseLoader:
         self.LCA_database = lca_database_processed
         self.IO_database = io_database_processed
 
+        del lca_database_processed
+        del io_database_processed
+
         versions_of_ecoinvent = ['ecoinvent3.5', 'ecoinvent3.3']
         versions_of_exiobase = ['exiobase2', 'exiobase3']
         if self.lca_database_name_and_version not in versions_of_ecoinvent:
@@ -159,7 +166,7 @@ class DatabaseLoader:
         if self.io_database_name_and_version not in versions_of_exiobase:
             print('The IO database version you entered is not supported currently')
 
-    def combine_ecoinvent_exiobase(self, path_to_io_database):
+    def combine_ecoinvent_exiobase(self, path_to_io_database, path_to_capitals):
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args
         ---
@@ -180,7 +187,6 @@ class DatabaseLoader:
         self.F_f = self.F_f.astype(dtype='float32')
         self.y_io = self.IO_database.Y.copy()
         self.y_io = self.y_io.astype(dtype='float32')
-        self.y_f = pd.DataFrame(np.eye(len(self.A_ff)), self.A_ff.index, self.A_ff.columns, dtype='float32')
         self.C_f = self.LCA_database['C'].copy()
         self.C_f = self.C_f.astype(dtype='float32')
         self.STR_f = self.LCA_database['STR'].copy().drop('cas', axis=1)
@@ -267,6 +273,19 @@ class DatabaseLoader:
             self.reference_year_IO = int(self.IO_database.meta.description[-4:])
 
         self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
+
+        # CAPITAL GOODS
+        K_dict = scipy.io.loadmat(path_to_capitals)
+        Kbar = pd.DataFrame(K_dict['KbarCfc'].toarray())
+        inv_diag_x = pd.DataFrame(np.diag(self.IO_database.x.iloc[:, 0]))
+        for position in inv_diag_x:
+            if inv_diag_x.loc[position, position] != 0:
+                inv_diag_x.loc[position, position] = 1 / inv_diag_x.loc[position, position]
+
+        self.K_io = Kbar.dot(inv_diag_x)
+        self.K_io.index = self.A_io.index
+        self.K_io.columns = self.A_io.columns
+        self.K_io = self.K_io.astype('float32')
 
         del self.LCA_database
         del self.IO_database
@@ -385,8 +404,8 @@ class DatabaseLoader:
         self.qualitychecks()
 
         return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f, F_io=self.F_io,
-                     F_io_f=self.F_io_f, y_io=self.y_io, y_f=self.y_f, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f,
-                     STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
+                     F_io_f=self.F_io_f, y_io=self.y_io, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f,
+                     STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions, K_io=self.K_io,
                      countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
                      number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
                      number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
@@ -403,6 +422,12 @@ class DatabaseLoader:
                                                       '/Template.xlsx'), 'Metadata_foreground'))
         template_foreground_exchanges = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
                                                       '/Template.xlsx'), 'Unit_processes_exchanges')).ffill()
+
+        if template_foreground_metadata.isna().all().all():
+            return
+        if template_foreground_exchanges.isna().all().all():
+            return
+
         for new_process_to_hybridize in [i for i in template_foreground_metadata.index
                                          if template_foreground_metadata.to_hybridize[i] == 'yes']:
             self.list_to_hyb.append(new_process_to_hybridize)
@@ -444,8 +469,8 @@ class DatabaseLoader:
         self.A_ff[index] = 0
         self.A_ff = pd.concat([self.A_ff, pd.DataFrame(0, columns=self.A_ff.columns, index=[index])], sort=False)
         self.F_f[index] = 0
-        self.y_f[index] = 0
-        self.y_f.loc[index, index] = 1
+        # self.y_f[index] = 0
+        # self.y_f.loc[index, index] = 1
 
     def LCA_convention_to_IO(self, dataframe):
         """ Changes the convetion of an LCA technology matrix from LCA to IO """
@@ -518,8 +543,8 @@ class DatabaseLoader:
             raise Exception('Duplicate in the indexes of PRO_f')
         if self.A_ff.isnull().any().any():
             raise Exception('NaN values in A_ff')
-        if not self.A_ff[self.A_ff < 0].isna().all().all():
-            raise Exception('Negative values in A_ff')
+        # if not self.A_ff[self.A_ff < 0].isna().all().all():
+        #     raise Exception('Negative values in A_ff')
         if not (self.A_ff.index == self.PRO_f.index).all():
             raise Exception('A_ff and PRO_f do not have the same index')
         if not (self.A_ff.index == self.A_ff.columns).all():
@@ -588,11 +613,13 @@ class LCAIO:
         self.F_io = pd.DataFrame()
         self.F_io_f = pd.DataFrame()
         self.y_io = pd.DataFrame()
-        self.y_f = pd.DataFrame()
         self.C_f = pd.DataFrame()
         self.C_io = pd.DataFrame()
         self.STR_f = pd.DataFrame()
         self.STR_io = pd.DataFrame()
+
+        self.K_io = pd.DataFrame()
+        self.K_io_f = pd.DataFrame()
 
         self.io_categories = defaultdict(list)
         self.categories_same_functionality = []
@@ -629,70 +656,14 @@ class LCAIO:
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
 
+        self.description = []
+
         allowed_keys = list(self.__dict__.keys())
         self.__dict__.update((key, value) for key, value in kwargs.items() if key in allowed_keys)
 
-    # ------------------------------PROPERTIES-------------------------------------
-
-    @property
-    def A(self):
-        """ Technical coefficient matrix for whole system """
-        A_io = self.A_io.copy()
-        A_io_f = self.A_io_f.copy()
-        A_io.index = A_io.index.tolist()
-        A_io.columns = A_io.columns.tolist()
-        A_io_f.index = A_io_f.index.tolist()
-        try:
-            a = pd.concat([self.A_ff, pd.concat([self.A_io_f, self.A_io], axis=1)], axis=0, sort=False)
-        # for outdated pandas versions
-        except TypeError:
-            a = pd.concat([self.A_ff, pd.concat([self.A_io_f, self.A_io], axis=1)], axis=0)
-        return a.fillna(0)
-
-    @property
-    def F(self):
-        """ Normalized extensions for whole system"""
-        F_io = self.F_io.copy()
-        F_io_f = self.F_io_f.copy()
-        F_io.index = F_io.index.tolist()
-        F_io.columns = F_io.columns.tolist()
-        F_io_f.index = F_io_f.index.tolist()
-        try:
-            f = pd.concat([self.F_f, pd.concat([self.F_io_f, self.F_io], axis=1)], axis=0, sort=False)
-        except TypeError:
-            f = pd.concat([self.F_f, pd.concat([self.F_io_f, self.F_io], axis=1)], axis=0)
-        return f.fillna(0.0)
-
-    @property
-    def C(self):
-        """ Characterisation factors for whole system """
-        try:
-            c = pd.concat([self.C_f, self.C_io], sort=False).fillna(0)
-        except TypeError:
-            c = pd.concat([self.C_f, self.C_io]).fillna(0)
-            c = c.reindex(self.F.index)
-        return c
-
-    @property
-    def y(self):
-        """ Final demand for whole system """
-        y_io = self.y_io.copy()
-        y_io.index = y_io.index.tolist()
-        y_io.columns = y_io.columns.tolist()
-        try:
-            y_pro = pd.concat([self.y_f, y_io], axis=0, sort=False)
-        except TypeError:
-            y_pro = pd.concat([self.y_f, y_io], axis=0)
-        return y_pro.fillna(0.0)
-
-    @property
-    def STR(self):
-        """Extensions (stressor, factors, elementary flow) labels for whole system"""
-        return pd.concat([self.STR_f, self.STR_io], axis=0, sort=False).fillna('')
-
     # ----------------------------CORE METHOD-------------------------------------
 
-    def hybridize(self, method_double_counting='STAM'):
+    def hybridize(self, method_double_counting, capitals_method):
         """
         Hybridize the LCA database with the IO database
 
@@ -703,6 +674,13 @@ class LCAIO:
         -----
             * method_double_counting: method to correct double counting with (='binary' or ='STAM')
         """
+
+        if not method_double_counting:
+            raise Exception('Please enter a method to correct double counting (i.e. binary or STAM)')
+
+        if not capitals_method:
+            self.description.append('Capitals not endogenized')
+            print('Capitals will not be endogenized in the hybridization')
 
         self.identify_rows()
         self.update_prices_electricity()
@@ -809,7 +787,9 @@ class LCAIO:
 
             self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
 
-        if method_double_counting == 'STAM':
+            self.description.append('binary')
+
+        elif method_double_counting == 'STAM':
             lambda_filter_matrix = self.H.dot(self.A_ff_processed)
             lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
@@ -841,6 +821,34 @@ class LCAIO:
             self.A_io_f = phi_filter_matrix.multiply(
                 gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.A_io_f_uncorrected)))
             self.A_io_f = self.A_io_f.astype(dtype='float32')
+
+            self.description.append('STAM')
+
+        if capitals_method == 'LCA':
+            self.description.append('Capitals endogenized prioritizing LCA capitals over IO')
+            pass
+
+        if capitals_method == 'IO':
+            # We use the concordance to determine which processes of ecoinvent are capitals
+            capitals = ['Cattle', 'Construction work', 'Electrical machinery and apparatus n.e.c.',
+                        'Machinery and equipment n.e.c.',
+                        'Meat animals nec', 'Motor vehicles, trailers and semi-trailers',
+                        'Office machinery and computers',
+                        'Other transport equipment', 'Pigs', 'Poultry',
+                        'Radio, television and communication equipment and apparatus',
+                        'Medical, precision and optical instruments, watches and clocks',
+                        'Furniture; other manufactured goods n.e.c.',
+                        'Real estate services', 'Computer and related services']
+            # K_io_f is defined the same as A_io_f
+            self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+            self.K_io_f = self.K_io_f.astype('float32')
+            # the correction for double counting implies here to only trust IO capital and not LCA's
+            self.A_ff.loc[[i for i in self.PRO_f.index if self.PRO_f.ProductTypeName[i] in capitals], :] = 0
+            # Since we endogenized capitals we need to remove them from both final demand and factors of production
+            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
+            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
+
+            self.description.append('Capitals endogenized prioritizing IO capitals over LCA')
 
     # ---------------------PREPARATIONS FOR THE HYBRIDIZATION----------------------
 
@@ -1053,7 +1061,8 @@ class LCAIO:
 
             hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                              'F_f': self.F_f, 'F_io': self.F_io, 'F_io_f': self.F_io_f,
-                             'y_io': self.y_io, 'y_f': self.y_f, 'C_f': self.C_f, 'C_io': self.C_io}
+                             'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io, 'K_io_f': self.K_io_f,
+                             'list_to_hyb': self.list_to_hyb, 'description': self.description}
 
             with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
                                                                       self.lca_database_name_and_version + '_' +
@@ -1102,12 +1111,35 @@ class Analysis:
         self.F_f = self.hybrid_system['F_f']
         self.F_io = self.hybrid_system['F_io']
         self.F_io_f = self.hybrid_system['F_io_f']
-        self.y_f = self.hybrid_system['y_f']
-        self.y_io = self.hybrid_system['y_io']
         self.C_f = self.hybrid_system['C_f']
         self.C_io = self.hybrid_system['C_io']
+        self.K_io = self.hybrid_system['K_io']
+        self.K_io_f = self.hybrid_system['K_io_f']
+        self.list_to_hyb = self.hybrid_system['list_to_hyb']
+        self.description = self.hybrid_system['description']
+
+        del self.hybrid_system
+
+        self.index_A = []
+        for index in self.A_ff.index:
+            self.index_A.append(index)
+        for index in list(self.A_io.index.values):
+            self.index_A.append(index)
+
+        self.index_F = []
+        for index in self.F_f.index:
+            self.index_F.append(index)
+        for index in list(self.F_io.index):
+            self.index_F.append(index)
+
+        self.y = np.zeros((len(self.A_ff)+len(self.A_io_f), len(self.A_ff)))
+        np.fill_diagonal(self.y, 1, wrap=False)
 
         self.d = pd.DataFrame()
+
+        self.L_A = np.array(None)
+        self.L_K = np.array(None)
+        self.L_AK = np.array(None)
 
         self.GWP100_CML2001 = ast.literal_eval(
             pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
@@ -1119,33 +1151,12 @@ class Analysis:
             pkg_resources.resource_string(__name__, '/Data/Characterization_matching/HTox.txt').decode('utf-8'))
 
     @property
-    def A(self):
-        """ Technical coefficient matrix for whole system """
-        A_io = self.A_io.copy()
-        A_io_f = self.A_io_f.copy()
-        A_io.index = A_io.index.tolist()
-        A_io.columns = A_io.columns.tolist()
-        A_io_f.index = A_io_f.index.tolist()
-        try:
-            a = pd.concat([self.A_ff, pd.concat([self.A_io_f, self.A_io], axis=1)], axis=0, sort=False)
-        # for outdated pandas versions
-        except TypeError:
-            a = pd.concat([self.A_ff, pd.concat([self.A_io_f, self.A_io], axis=1)], axis=0)
-        return a.fillna(0)
-
-    @property
     def F(self):
         """ Normalized extensions for whole system"""
-        F_io = self.F_io.copy()
-        F_io_f = self.F_io_f.copy()
-        F_io.index = F_io.index.tolist()
-        F_io.columns = F_io.columns.tolist()
-        F_io_f.index = F_io_f.index.tolist()
-        try:
-            f = pd.concat([self.F_f, pd.concat([self.F_io_f, self.F_io], axis=1)], axis=0, sort=False)
-        except TypeError:
-            f = pd.concat([self.F_f, pd.concat([self.F_io_f, self.F_io], axis=1)], axis=0)
-        return f.fillna(0.0)
+        f = np.concatenate(
+            [np.concatenate([self.F_f.values, np.zeros((len(self.F_f), len(self.A_io)))], axis=1),
+             np.concatenate([self.F_io_f.values, self.F_io.values], axis=1)], axis=0)
+        return f
 
     @property
     def C(self):
@@ -1157,26 +1168,14 @@ class Analysis:
             c = c.reindex(self.F.index)
         return c
 
-    @property
-    def y(self):
-        """ Final demand for whole system """
-        y_io = self.y_io.copy()
-        y_io.index = y_io.index.tolist()
-        y_io.columns = y_io.columns.tolist()
-        try:
-            y_pro = pd.concat([self.y_f, y_io], axis=0, sort=False)
-        except TypeError:
-            y_pro = pd.concat([self.y_f, y_io], axis=0)
-        return y_pro.fillna(0.0)
-
-    def calc_lifecycle(self, stage='impacts', perspective=None):
+    def calc_lifecycle(self, capitals=True, stage='impacts'):
         """ Simply calculates lifecycle production, emissions, or impacts
 
         Args
         ----
             * stage:    either 'production', 'emissions', or 'impacts'
                         determines what is being calculated
-            * perspective
+            * capitals: boolean
 
         Returns
         -------
@@ -1185,29 +1184,43 @@ class Analysis:
 
         """
 
-        A = self.A.copy()
-        Y = self.y.copy()
-        F = self.F.copy()
-        C = self.C.copy()
+        if capitals:
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_AK.pickle')),
+                           'rb') as f:
+                self.L_AK = pd.read_pickle(f)
+            x = self.L_AK.dot(self.y)
 
-        Identity = pd.DataFrame(np.eye(len(A)), index=A.index, columns=A.columns, dtype='float32')
+            if stage == 'production':
+                return x
 
-        if perspective == 'consumer':
-            y = pd.DataFrame(np.diag(Y.squeeze()))
-            x = pd.DataFrame(np.linalg.solve(Identity - A, y), index=A.index, columns=A.index, dtype='float32')
-        else:
-            x = pd.DataFrame(np.linalg.solve(Identity - A, Y), index=A.index, columns=Y.columns, dtype='float32')
+            e = self.F.dot(x)
+            if stage == 'emissions':
+                return e
 
-        if stage == 'production':
-            return x
+            if stage == 'impacts':
+                d = self.C.values.dot(e)
+                self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
+                print('Calculations done! Results are contained in self.d')
 
-        e = F.dot(x)
-        if stage == 'emissions':
-            return e
+        if not capitals:
 
-        if stage == 'impacts':
-            self.d = C.dot(e)
-            print('Calculations done! Results are contained in self.d')
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_A.pickle')),
+                           'rb') as f:
+                self.L_A = pd.read_pickle(f)
+
+            x = self.L_A.dot(self.y)
+
+            if stage == 'production':
+                return x
+
+            e = self.F.dot(x)
+            if stage == 'emissions':
+                return e
+
+            if stage == 'impacts':
+                d = self.C.values.dot(e)
+                self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
+                print('Calculations done! Results are contained in self.d')
 
     def contribution_analysis_LCA_processes(self, UUID, impact_category):
         """ Contribution analysis for the LCA part of the hybrid LCI only
@@ -1216,8 +1229,6 @@ class Analysis:
             * UUID:             UUID of the process to examine
             * impact_category:  impact category to examine (GWP, ODP, Acidification, Eutrophication, HTox)
             """
-
-        global name_category, generic_impact_category_name
 
         if not impact_category:
             print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
@@ -1263,8 +1274,6 @@ class Analysis:
             * impact_category:  impact category to examine (GWP, ODP, Acidification, Eutrophication, HTox)
             """
 
-        global name_category, generic_impact_category_name
-
         if not impact_category:
             print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
             return
@@ -1293,23 +1302,46 @@ class Analysis:
         D = pd.DataFrame(self.C_io.dot(self.F_io.dot(X)).loc[name_category, :]).transpose()
         return D.sort_values(D.columns[0], ascending=False)
 
-    def contribution_analysis_total(self, UUID, impact_category):
-        """ Total contribution analysis
-        Args:
-        ----
-            * UUID:             UUID of the process to examine
-            * impact_category:  impact category to examine (GWP, ODP, Acidification, Eutrophication, HTox)
-            """
+    def contribution_analysis(self, type_of_analysis, UUID, impact_category):
 
-        global name_category_LCA, name_category_IO, generic_impact_category_name
+        name_impact_categories = self.check_impact_category(impact_category)
+
+        if type_of_analysis == 'total':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_AK.pickle')),
+                           'rb') as f:
+                self.L_AK = pd.read_pickle(f)
+
+            X = self.L_AK.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                      self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
+                                                      self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+
+        elif type_of_analysis == 'on_capitals_only':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_K.pickle')),
+                           'rb') as f:
+                self.L_K = pd.read_pickle(f)
+
+            X = self.L_K.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                     self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+
+        elif type_of_analysis == 'without_capitals':
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_A.pickle')),
+                           'rb') as f:
+                self.L_A = pd.read_pickle(f)
+
+            X = self.L_A.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                     self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+        else:
+            print('Enter the type_of_analysis desided')
+            return
+
+        results = self.get_results(UUID, X, name_impact_categories)
+        return results
+
+    def check_impact_category(self, impact_category):
 
         if not impact_category:
             print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
             return
-
-        A = self.A.copy()
-        F = self.F.copy()
-        C = self.C.copy()
 
         if impact_category == 'GWP100':
             generic_impact_category_name = self.GWP100_CML2001
@@ -1332,40 +1364,69 @@ class Analysis:
                     name_category_IO = [self.C_io.index[i]]
             except NameError:
                 print('For impact categories, enter GWP100, Acidification, Eutrophication or HTox')
+        list_to_return = [name_category_LCA, name_category_IO]
+        return list_to_return
 
-        Identity = pd.DataFrame(np.eye(len(A)), A.index, A.columns, dtype='float32')
-        X = pd.DataFrame(np.linalg.solve(Identity - A, pd.DataFrame(np.diag(A.loc[:, UUID]))), A.index, A.columns)
-        matrix = pd.DataFrame(0, index=F.index, columns=F.columns, dtype='float32')
-        matrix.loc[:, UUID] = F.loc[:, UUID]
-        D = C.fillna(0).dot(F.dot(X) + matrix)
-        foo = pd.DataFrame(D.loc[name_category_LCA, :]).join(D.loc[name_category_IO, :].transpose())
-        foo['total'] = pd.DataFrame(
-            foo.iloc[:, foo.columns.get_loc(name_category_LCA)] + foo.iloc[:, foo.columns.get_loc(name_category_IO[0])])
+    def get_results(self, UUID, X, name_categories):
+
+        matrix = self.F.copy()
+        matrix[:, self.PRO_f.index.get_loc(UUID) + 1:] = 0
+        matrix[:, :self.PRO_f.index.get_loc(UUID) - 1] = 0
+        d = self.C.values.dot(self.F.dot(X) + matrix)
+        D = pd.DataFrame(d, index=self.C.index, columns=self.index_A)
+        df = pd.DataFrame(D.loc[name_categories[0], :]).join(D.loc[name_categories[1], :].transpose())
+        df['total'] = pd.DataFrame(
+            df.iloc[:, df.columns.get_loc(name_categories[0])] + df.iloc[:, df.columns.get_loc(name_categories[1][0])])
         listproduct = [x for x in self.PRO_f.productName] + [float('nan')] * len(self.A_io)
         listactivity = [x for x in self.PRO_f.activityName] + [float('nan')] * len(self.A_io)
-        foo = foo.join(pd.DataFrame(listproduct, index=foo.index, columns=['productName']))
-        foo = foo.join(pd.DataFrame(listactivity, index=foo.index, columns=['activityName']))
-        foo = foo.sort_values(by='total', ascending=False)
-        return foo
+        df = df.join(pd.DataFrame(listproduct, index=df.index, columns=['productName']))
+        df = df.join(pd.DataFrame(listactivity, index=df.index, columns=['activityName']))
+        df = df.sort_values(by='total', ascending=False)
+        return df
 
-    def look_into_A(self, UUID):
-        """ Quickly identifies the inputs required by the studied process"""
+    def calc_Leontief_inverses(self, matrix):
 
-        with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                                  self.lca_database_name_and_version + '_' +
-                                                                  self.io_database_name_and_version +
-                                                                  '/Technology_matrix.pickle')), 'rb') as f:
-            A = pd.read_pickle(f)
-        with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/hybrid_databases/' +
-                                                                  self.lca_database_name_and_version + '_' +
-                                                                  self.io_database_name_and_version +
-                                                                  '/Metadata.pickle')), 'rb') as f:
-            PRO = pd.read_pickle(f)
+        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/')):
+            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/'))
+        if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/__init__.py')):
+            os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/__init__.py'))
 
-        bar = A.loc[:, UUID]
-        for i in range(0, len(bar)):
-            if bar.iloc[i] > 0:
-                print([bar.iloc[i], ' / ', PRO.productName.loc[bar.index[i]], ' / ', bar.index[i]])
+        if matrix == 'L_A':
+            a = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
+                axis=0)
+            invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - a)
+            invert = invert.astype('float32')
+
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_A.pickle')),
+                           'wb') as f:
+                pickle.dump(invert, f)
+
+        if matrix == 'L_K':
+            k = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                 np.concatenate([self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                axis=0)
+            invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - k)
+            invert = invert.astype('float32')
+
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_K.pickle')),
+                           'wb') as f:
+                pickle.dump(invert, f)
+
+        if matrix == 'L_AK':
+            ak = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                 np.concatenate([self.A_io_f.values + self.K_io_f.values, self.A_io.values + self.K_io.values],
+                                axis=1)],
+                axis=0)
+            invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - ak)
+            invert = invert.astype('float32')
+
+            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/Leontief_inverses/L_AK.pickle')),
+                           'wb') as f:
+                pickle.dump(invert, f)
 
 
 def extract_version_from_name(name_database):
