@@ -1333,7 +1333,7 @@ class Analysis:
         """ Normalized extensions for whole system"""
         f = np.concatenate(
             [np.concatenate([self.F_f.values, np.zeros((len(self.F_f), len(self.A_io)))], axis=1),
-             np.concatenate([self.F_io_f.values, self.F_io.values], axis=1)], axis=0)
+             np.concatenate([self.F_io_f.values, self.F_io.values], axis=1)], axis=0).astype(dtype='float32')
         return f
 
     @property
@@ -1367,9 +1367,9 @@ class Analysis:
             start = time.time()
 
             ak = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
                  np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0)
+                axis=0).astype(dtype='float32')
             x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak, self.y)
             d = self.C.values.dot(self.F).dot(x)
             self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
@@ -1380,9 +1380,9 @@ class Analysis:
 
         if not capitals:
             a = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
                  np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0)
+                axis=0).astype(dtype='float32')
             x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - a, self.y)
             d = self.C.values.dot(self.F).dot(x)
             self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
@@ -1473,51 +1473,37 @@ class Analysis:
         name_impact_categories = self.check_impact_category(impact_category)
 
         if type_of_analysis == 'total':
-            # with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-            #                                                           self.lca_database_name_and_version + '_' +
-            #                                                           self.io_database_name_and_version +
-            #                                                           '_' + self.capitals + '_capitals_' +
-            #                                                           self.double_counting + '/L_AK.pickle')),
-            #                'wb') as f:
-            #     self.L_AK = pd.read_pickle(f)
-
-            # X = self.L_AK.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-            #                                           self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
-            #                                           self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
-
             ak = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
                  np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0)
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak,
+                axis=0).astype(dtype='float32')
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - ak,
                                 np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                         self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
                                                         self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
                                 )
 
         elif type_of_analysis == 'on_capitals_only':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_' + self.capitals + '_capitals_' +
-                                                                      self.double_counting + '/L_K.pickle')),
-                           'wb') as f:
-                self.L_K = pd.read_pickle(f)
+            k = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+                 np.concatenate([self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                axis=0).astype(dtype='float32')
 
-            X = self.L_K.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                     self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - k,
+                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                        self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
+                                )
 
         elif type_of_analysis == 'without_capitals':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_' + self.capitals + '_capitals_' +
-                                                                      self.double_counting + '/L_A.pickle')),
-                           'wb') as f:
-                self.L_A = pd.read_pickle(f)
+            a = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                axis=0).astype(dtype='float32')
 
-            X = self.L_A.dot(np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                     self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0)))
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
+                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                        self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
+                                )
 
         else:
             print('Enter the type_of_analysis desided')
