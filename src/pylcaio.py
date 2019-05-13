@@ -269,6 +269,7 @@ class DatabaseLoader:
                 pd.read_excel(
                     pkg_resources.resource_stream(__name__, '/Data/characterisation_CREEA_version3.xlsx'),
                     'Q_factor_inputs')], sort=False).fillna(0)
+            self.C_io = self.C_io.reindex(self.F_io.index, axis=1)
             self.C_io = self.C_io.astype(dtype='float32')
             self.reference_year_IO = int(self.IO_database.meta.description[-4:])
 
@@ -668,15 +669,23 @@ class LCAIO:
     # ----------------------------CORE METHOD-------------------------------------
 
     def hybridize(self, method_double_counting, capitals_method=False):
-        """
-        Hybridize the LCA database with the IO database
+        """ Hybridize an LCA database with an IO database
 
         self.A_io_f_uncorrected is calculated following the equation (1) of the paper [insert doi]
-        self.A_io_f is calculated following the euqation (2) of the paper [insert doi]
+        self.A_io_f is calculated following the equation (2) of the paper [insert doi]
 
         Args:
         -----
-            * method_double_counting: method to correct double counting with (='binary' or ='STAM')
+            method_double_counting  : method to correct double counting with (='binary' or ='STAM')
+                    capitals_method : parameter defining if capitals will be endogenized (or not) in the hybridization
+                                      can be equal to False (for no endogenization), 'IO' (for an endogenization
+                                      prioritizing capitals from IO above capitals from LCA) and 'LCA' (for an
+                                      endogenization prioritizing LCA capitals)
+
+        Returns:
+        -------
+            The updated self.A_io_f matrix (and self.K_io_f if capitals endogenized)
+
         """
 
         if not method_double_counting:
@@ -684,7 +693,7 @@ class LCAIO:
 
         if not capitals_method:
             self.description.append('Capitals not endogenized')
-            print('Capitals will not be endogenized in the hybridization')
+            print('Capitals will not be endogenized in this hybridization')
 
         self.identify_rows()
         self.update_prices_electricity()
@@ -803,7 +812,7 @@ class LCAIO:
 
             self.G = pd.DataFrame(0, index=self.A_io.index.get_level_values('sector').tolist()[
                                              :self.number_of_products_IO],
-                                    columns=self.STAM_table.columns)
+                                  columns=self.STAM_table.columns)
             for columns in self.G.columns:
                 self.G.loc[[i for i in self.G.index if i in self.io_categories[columns]], columns] = 1
             self.G = self.G.append([self.G] * (self.number_of_countries_IO + self.number_of_RoW_IO - 1))
@@ -875,6 +884,14 @@ class LCAIO:
     # ---------------------PREPARATIONS FOR THE HYBRIDIZATION----------------------
 
     def identify_rows(self):
+        """ Method to identify the various unique Rest of the World (RoW) regions of the LCA database
+
+        Returns:
+        --------
+            The updated self.dictRoW in which unique RoW regions are identified in terms of countries they include
+
+        """
+
 
         unique_activities_using_row = list(set(
             self.PRO_f.activityNameId[[i for i in self.PRO_f.index if self.PRO_f.io_geography[i] == 'RoW']].tolist()))
@@ -944,8 +961,14 @@ class LCAIO:
         self.PRO_f.io_geography.loc[[i for i in self.PRO_f.index if type(self.PRO_f.io_geography[i]) == list]] = 'GLO'
 
     def update_prices_electricity(self):
-        """ Specially for ecoinvent and exiobase, but cannot be ran in the DatabaseLoader class as it requires
-        identifying RoW regions to fully calculates all new prices """
+        """ Method specially for ecoinvent and exiobase, in which electricity prices from ecoinvent are replaced by
+            price extracted from exiobase
+
+         Returns:
+         -------
+            The updated price column of the self.PRO_f matrix
+
+         """
 
         version_ecoinvent = extract_version_from_name(self.lca_database_name_and_version)
         version_exiobase = extract_version_from_name(self.io_database_name_and_version)
@@ -967,7 +990,13 @@ class LCAIO:
         self.PRO_f.price.update(merged.prices)
 
     def calc_productions(self):
-        """ Calculates the different total productions for either countries, regions or RoWs."""
+        """ Calculates the different total productions for either countries, regions or RoWs
+
+        Returns:
+        -------
+            The updated self.total_prod_country, self.total_prod_region and self.total_prod_RoW dataframe
+
+        """
 
         # the user needs to determine the total demand before being able to calculate productions
         listdrop = []
@@ -1048,8 +1077,15 @@ class LCAIO:
             self.total_prod_RoW = self.total_prod_RoW.join(listdffff[i], how='outer')
 
     def extend_inventory(self):
-        """" Method creating a new technology matrix for the LCA database in which the inputs of processes not to
-        hybridize are added to the unit process inventories of each LCA process to hybridize """
+        """ Method creating a new technology matrix for the LCA database in which the inputs of processes not to
+        hybridize are added to the unit process inventories of each LCA process to hybridize
+
+        Returns:
+        -------
+            The updated self.A_ff_processed matrix
+
+        """
+
         # matrix of non-hybridized processes
         ANT = self.A_ff.copy()
         ANT.loc[self.list_to_hyb] = 0
@@ -1067,7 +1103,13 @@ class LCAIO:
     # -------------------------- EXPORT RESULTS -----------------------------------
 
     def save_system(self):
-        """ Export the hybridized database to either dataframe via pickle """
+        """ Export the hybridized database to dataframe via pickle
+
+        Returns:
+        --------
+            A pickle of the hybrid system exported to the corresponding folder in the pylcaio package
+
+        """
 
         hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                              'F_f': self.F_f, 'F_io': self.F_io, 'F_io_f': self.F_io_f,
@@ -1351,14 +1393,11 @@ class Analysis:
 
         Args
         ----
-            * stage:    either 'production', 'emissions', or 'impacts'
-                        determines what is being calculated
-            * capitals: boolean
+            * capitals: boolean to know if capitals are incorporated or not in the calculations
 
         Returns
         -------
-            * either lifecycle production (x), or emissions (e) or impact (d)
-              vector
+            * either lifecycle impact in self.d
 
         """
 
@@ -1394,7 +1433,7 @@ class Analysis:
         ----
             * UUID:             UUID of the process to examine
             * impact_category:  impact category to examine (GWP, ODP, Acidification, Eutrophication, HTox)
-            """
+        """
 
         if not impact_category:
             print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
@@ -1469,6 +1508,23 @@ class Analysis:
         return D.sort_values(D.columns[0], ascending=False)
 
     def contribution_analysis(self, type_of_analysis, UUID, impact_category):
+        """ Method to execute multiple types of contribution analyses.
+
+        Args:
+        -----
+                    type_of_analysis: the type of contribution analysis desired. Can be 'total','on_capitals_only',
+                                      or 'without_capitals'.
+                                      'total' includes A_io_f and K_io_f in the contribution analysis
+                                      'on_capitals_only' only includes K_io_f in the analysis
+                                      'without_capitals' only includes A_io_f in the analysis
+                                UUID: the UUID of the process to analyze
+                    impact_category : the impact category on to which the analysis is performed
+
+        Returns:
+        -------
+            A dataframe ranking processes in contribution descending order
+
+        """
 
         name_impact_categories = self.check_impact_category(impact_category)
 
@@ -1495,11 +1551,13 @@ class Analysis:
                                 )
 
         elif type_of_analysis == 'without_capitals':
+            print('concatenating')
             a = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                 np.concatenate([self.A_io_f.values, self.A_io.values #+ self.K_io.values
+                                 ], axis=1)],
                 axis=0).astype(dtype='float32')
-
+            print('life-cycling LOL')
             X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
                                 np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                         self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
@@ -1513,7 +1571,17 @@ class Analysis:
         return results
 
     def check_impact_category(self, impact_category):
+        """ Side method identifying the exact index labels of the studied impact categories
 
+        Args:
+        -----
+            impact_category : the name of the impact category
+
+        Returns:
+        --------
+            A two-elements list of the two labels of impact categories to study
+
+        """
         if not impact_category:
             print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
             return
@@ -1543,7 +1611,19 @@ class Analysis:
         return list_to_return
 
     def get_results(self, UUID, X, name_categories):
+        """ Side method to get the emissions of a given production
 
+        Args:
+        -----
+                        UUID: the UUID of the process
+                        X   : the matrix of total output calculated in the contribution_analysis method
+            name_categories : the list of name categories extracted in check_impact_category()
+
+        Returns:
+        --------
+            The ranked dataframe of impacts contribution
+
+        """
         matrix = self.F.copy()
         matrix[:, self.PRO_f.index.get_loc(UUID) + 1:] = 0
         matrix[:, :self.PRO_f.index.get_loc(UUID) - 1] = 0
