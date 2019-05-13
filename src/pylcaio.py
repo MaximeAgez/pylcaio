@@ -702,7 +702,8 @@ class LCAIO:
 
         if not capitals_method:
             self.description.append('Capitals not endogenized')
-            print('Capitals will not be endogenized in this hybridization')
+            if self.K_io != pd.DataFrame():
+                raise Exception("Enter the capitals_method: 'IO' or 'LCA'")
 
         self.identify_rows()
         self.update_prices_electricity()
@@ -1411,7 +1412,6 @@ class Analysis:
         """
 
         if capitals:
-            import time
             start = time.time()
 
             ak = np.concatenate(
