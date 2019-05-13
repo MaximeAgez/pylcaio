@@ -166,11 +166,12 @@ class DatabaseLoader:
         if self.io_database_name_and_version not in versions_of_exiobase:
             print('The IO database version you entered is not supported currently')
 
-    def combine_ecoinvent_exiobase(self, path_to_io_database, path_to_capitals):
+    def combine_ecoinvent_exiobase(self, path_to_io_database='', path_to_capitals=''):
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args
         ---
             * path_to_io_database   : the path leading to the io database folder
+            * path_to_capitals      : the path leading to the capitals new matrix
         """
 
         version_ecoinvent = extract_version_from_name(self.lca_database_name_and_version)
@@ -197,6 +198,9 @@ class DatabaseLoader:
         self.number_of_countries_IO = len([i for i in self.IO_database.get_regions()]) - self.number_of_RoW_IO
 
         if version_exiobase == str(2):
+            if path_to_io_database == '':
+                raise Exception('Please provide the path to the exiobase2 folder as an argument of '
+                                'combine_ecoinvent_exiobase()')
             self.reference_year_IO = 2007
             self.IO_database.emissions.S.index = self.IO_database.emissions.S.index.tolist()
             self.IO_database.emissions.S.columns = self.IO_database.emissions.S.columns.tolist()
@@ -276,17 +280,22 @@ class DatabaseLoader:
         self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
 
         # CAPITAL GOODS
-        K_dict = scipy.io.loadmat(path_to_capitals)
-        Kbar = pd.DataFrame(K_dict['KbarCfc'].toarray())
-        inv_diag_x = pd.DataFrame(np.diag(self.IO_database.x.iloc[:, 0]))
-        for position in inv_diag_x:
-            if inv_diag_x.loc[position, position] != 0:
-                inv_diag_x.loc[position, position] = 1 / inv_diag_x.loc[position, position]
+        if path_to_capitals == '':
+            print('No path for the capital folder was provided. Capitals will not be endogenized')
+            Kbar = None
+            inv_diag_x = None
+        else:
+            K_dict = scipy.io.loadmat(path_to_capitals)
+            Kbar = pd.DataFrame(K_dict['KbarCfc'].toarray())
+            inv_diag_x = pd.DataFrame(np.diag(self.IO_database.x.iloc[:, 0]))
+            for position in inv_diag_x:
+                if inv_diag_x.loc[position, position] != 0:
+                    inv_diag_x.loc[position, position] = 1 / inv_diag_x.loc[position, position]
 
-        self.K_io = Kbar.dot(inv_diag_x)
-        self.K_io.index = self.A_io.index
-        self.K_io.columns = self.A_io.columns
-        self.K_io = self.K_io.astype('float32')
+            self.K_io = Kbar.dot(inv_diag_x)
+            self.K_io.index = self.A_io.index
+            self.K_io.columns = self.A_io.columns
+            self.K_io = self.K_io.astype('float32')
 
         del self.LCA_database
         del self.IO_database
