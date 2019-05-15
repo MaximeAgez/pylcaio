@@ -806,6 +806,10 @@ class LCAIO:
             lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
             lambda_filter_matrix = lambda_filter_matrix.fillna(0)
+            if capitals_method == 'LCA' or capitals_method == 'IO':
+                # double counting of capitals must be corrected in K_io_f and not A_io_f
+                lambda_filter_matrix.loc[[i for i in lambda_filter_matrix.index
+                                          if i[1] in self.list_of_capital_sectors]] = 1
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
 
             self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
@@ -818,6 +822,10 @@ class LCAIO:
             lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
             lambda_filter_matrix = lambda_filter_matrix.fillna(0)
+            if capitals_method == 'LCA' or capitals_method == 'IO':
+                # double counting of capitals must be corrected in K_io_f and not A_io_f
+                lambda_filter_matrix.loc[[i for i in lambda_filter_matrix.index
+                                          if i[1] in self.list_of_capital_sectors]] = 1
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
 
             self.G = pd.DataFrame(0, index=self.A_io.index.get_level_values('sector').tolist()[
@@ -827,10 +835,14 @@ class LCAIO:
                 self.G.loc[[i for i in self.G.index if i in self.io_categories[columns]], columns] = 1
             self.G = self.G.append([self.G] * (self.number_of_countries_IO + self.number_of_RoW_IO - 1))
             self.G.index = self.A_io_f.index
-            self.G.index = self.A_io_f.index
 
             gamma_filter_matrix = self.G.dot(self.STAM_table.dot(self.G.transpose().dot(self.H)))
             gamma_filter_matrix[gamma_filter_matrix == self.number_of_countries_IO + self.number_of_RoW_IO] = 1
+
+            if capitals_method == 'LCA' or capitals_method == 'IO':
+                # double counting of capitals must be corrected in K_io_f and not A_io_f
+                gamma_filter_matrix.loc[[i for i in gamma_filter_matrix.index
+                                         if i[1] in self.list_of_capital_sectors]] = 1
 
             phi_filter_matrix = pd.DataFrame(1, index=self.A_io_f.index, columns=self.A_io_f.columns)
             categories_used_by_processes = self.G.transpose().dot(self.H.dot(self.A_ff_processed))
