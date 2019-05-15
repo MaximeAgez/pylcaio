@@ -1,0 +1,9 @@
+['Cattle', 'Construction work', 'Electrical machinery and apparatus n.e.c.',
+                        'Machinery and equipment n.e.c.',
+                        'Meat animals nec', 'Motor vehicles, trailers and semi-trailers',
+                        'Office machinery and computers',
+                        'Other transport equipment', 'Pigs', 'Poultry',
+                        'Radio, television and communication equipment and apparatus',
+                        'Medical, precision and optical instruments, watches and clocks',
+                        'Furniture; other manufactured goods n.e.c.',
+                        'Real estate services', 'Computer and related services']
