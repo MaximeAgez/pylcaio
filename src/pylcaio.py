@@ -231,7 +231,7 @@ class DatabaseLoader:
             c_emissions.index = c_emissions.index.values
             c_emissions.columns = c_emissions.columns.values
             c_resources.columns = c_resources.columns.values
-            self.C_io = pd.concat([c_emissions, c_materials, c_resources, c_factorinputs], sort=False)
+            self.C_io = pd.concat([c_emissions, c_resources, c_materials, c_factorinputs], sort=False)
             self.C_io = self.C_io.fillna(0)
             self.C_io = self.C_io.astype(dtype='float32')
             self.STR_io = pd.DataFrame([self.IO_database.emissions.S.index.tolist(),
@@ -282,6 +282,10 @@ class DatabaseLoader:
         # CAPITAL GOODS
         if path_to_capitals == '':
             print('No path for the capital folder was provided. Capitals will not be endogenized')
+            Kbar = None
+            inv_diag_x = None
+        elif version_exiobase == str(2):
+            print('The endogeneization of capitals is only available with exiobase3')
             Kbar = None
             inv_diag_x = None
         else:
@@ -563,8 +567,12 @@ class DatabaseLoader:
             raise Exception('Some processes are neither in list_to_hyb nor list_not_to_hyb')
         if not (self.F_f.index.tolist().sort() == self.C_f.columns.tolist().sort()):
             raise Exception('Rows of F_f must match with columns of C_f')
-        if not (self.F_io.index.tolist().sort() == self.C_io.columns.tolist().sort()):
-            raise Exception('Rows of F_io must match with columns of C_io')
+        if self.io_database_name_and_version == 'exiobase3':
+            if not (self.F_io.index.tolist().sort() == self.C_io.columns.tolist().sort()):
+                raise Exception('Rows of F_io must match with columns of C_io')
+        elif self.io_database_name_and_version == 'exiobase2':
+            if not (self.F_io.index.tolist() == self.C_io.columns.tolist()):
+                raise Exception('Rows of F_io must match with columns of C_io')
         if not (self.A_ff.index.tolist().sort() == self.F_f.columns.tolist().sort()):
             raise Exception('Rows of A_ff must match with columns of F_f')
         if not (self.A_io.index.tolist().sort() == self.F_io.columns.tolist().sort()):
