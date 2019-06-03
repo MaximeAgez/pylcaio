@@ -17,7 +17,6 @@ Additional features will ultimately be implemented:
 The software is still under development but is already operational.
 
 System requirements:
-OS: Windows, Mac OS or Linux
 Memory: 12GB RAM
 
 
