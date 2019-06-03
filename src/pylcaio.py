@@ -1583,13 +1583,38 @@ class Analysis:
                                 )
 
         elif type_of_analysis == 'without_capitals':
-            print('concatenating')
             a = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values
-                                 ], axis=1)],
+                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
                 axis=0).astype(dtype='float32')
-            print('life-cycling LOL')
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
+                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                        self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
+                                )
+
+        elif type_of_analysis == 'origin':
+            a = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
+                axis=0).astype(dtype='float32')
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
+                                np.diag(self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)])
+                                )
+
+        elif type_of_analysis == 'added':
+            a = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
+                axis=0).astype(dtype='float32')
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
+                                np.diag(self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)])
+                                )
+
+        elif type_of_analysis == 'both':
+            a = np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
+                axis=0).astype(dtype='float32')
             X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
                                 np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                         self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
@@ -1722,6 +1747,38 @@ class Analysis:
                                                                       self.double_counting + '/L_AK.pickle')),
                            'wb') as f:
                 pickle.dump(invert, f)
+
+    def get_available_impact_methods(self, impact_category):
+
+        if impact_category == 'GWP':
+            return self.GWP100_CML2001
+        elif impact_category == 'Acidification':
+            return self.Acidification_CML2001
+        elif impact_category == 'Eutrophication':
+            return self.Eutrophication_CML2001
+        elif impact_category == 'Human toxicity':
+            return self.HTox_CML2001
+        else:
+            print('Possible impact categories: "GWP", "Acidification", "Eutrophication", "Human toxicity"')
+
+    def navigate_through_PRO_f(self, product=False, geography=False, activity=False):
+
+        if product and geography and activity:
+            return self.PRO_f.loc[[i for i in self.PRO_f.index if product in self.PRO_f.productName[i] and
+                                   geography in self.PRO_f.geography[i] and
+                                   activity in self.PRO_f.activityName[i]]]
+        elif product and geography:
+            return self.PRO_f.loc[[i for i in self.PRO_f.index if product in self.PRO_f.productName[i] and
+                                   geography in self.PRO_f.geography[i]]]
+        elif activity and geography:
+            return self.PRO_f.loc[[i for i in self.PRO_f.index if activity in self.PRO_f.activityName[i] and
+                                   geography in self.PRO_f.geography[i]]]
+        elif product:
+            return self.PRO_f.loc[[i for i in self.PRO_f.index if product in self.PRO_f.productName[i]]]
+        elif activity:
+            return self.PRO_f.loc[[i for i in self.PRO_f.index if activity in self.PRO_f.activityName[i]]]
+        else:
+            print('Enter at least a product or an activity')
 
 
 def extract_version_from_name(name_database):
