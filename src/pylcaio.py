@@ -1391,10 +1391,6 @@ class Analysis:
 
         self.d = pd.DataFrame()
 
-        self.L_A = np.array(None)
-        self.L_K = np.array(None)
-        self.L_AK = np.array(None)
-
         self.GWP100_CML2001 = ast.literal_eval(
             pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
         self.Acidification_CML2001 = ast.literal_eval(
@@ -1422,7 +1418,7 @@ class Analysis:
             c = c.reindex(self.F.index)
         return c
 
-    def calc_lifecycle(self, capitals=True):
+    def calc_lifecycle(self):
         """ Simply calculates lifecycle production, emissions, or impacts
 
         Args
@@ -1435,9 +1431,7 @@ class Analysis:
 
         """
 
-        if capitals:
-            start = time.time()
-
+        if self.capitals:
             ak = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
                  np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
@@ -1445,100 +1439,17 @@ class Analysis:
             x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak, self.y)
             d = self.C.values.dot(self.F).dot(x)
             self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
-
-            end = time.time()
-            print(end - start)
             print('Calculations done! Results are contained in self.d')
 
-        if not capitals:
+        if not self.capitals:
             a = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
                 axis=0).astype(dtype='float32')
             x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - a, self.y)
             d = self.C.values.dot(self.F).dot(x)
             self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
             print('Calculations done! Results are contained in self.d')
-
-    def contribution_analysis_LCA_processes(self, UUID, impact_category):
-        """ Contribution analysis for the LCA part of the hybrid LCI only
-        Args:
-        ----
-            * UUID:             UUID of the process to examine
-            * impact_category:  impact category to examine (GWP, ODP, Acidification, Eutrophication, HTox)
-        """
-
-        if not impact_category:
-            print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
-            return
-
-        if impact_category == 'GWP100':
-            generic_impact_category_name = self.GWP100_CML2001
-        if impact_category == 'Acidification':
-            generic_impact_category_name = self.Acidification_CML2001
-        if impact_category == 'Eutrophication':
-            generic_impact_category_name = self.Eutrophication_CML2001
-        if impact_category == 'Human toxicity' or impact_category == 'HTox':
-            generic_impact_category_name = self.HTox_CML2001
-
-        for i in range(0, len(self.C_f)):
-            try:
-                if self.C_f.index[i] in generic_impact_category_name:
-                    name_category = self.C_f.index[i]
-            except NameError:
-                print('For impact categories, enter GWP100, Acidification, Eutrophication or HTox')
-
-        Identity = pd.DataFrame(np.eye(len(self.A_ff)), self.A_ff.index, self.A_ff.columns)
-        X = pd.DataFrame(np.linalg.solve(Identity - self.A_ff.fillna(0), pd.DataFrame(np.diag(self.A_ff.loc[:, UUID]))),
-                         index=self.A_ff.index, columns=self.A_ff.columns)
-        matrix = pd.DataFrame(0, index=self.F_f.index, columns=self.F_f.columns)
-        matrix.loc[:, UUID] = self.F_f.loc[:, UUID]
-        D = pd.DataFrame(pd.DataFrame(self.C_f.fillna(0).dot(self.F_f.dot(X) + matrix)).loc[name_category, :],
-                         index=self.F_f.columns, columns=[name_category])
-        listproduct = [x for x in self.PRO_f.productName.loc[D.index]]
-        listactivity = [x for x in self.PRO_f.activityName.loc[D.index]]
-        D = D.join(pd.DataFrame(listproduct, index=D.index, columns=['productName']))
-        D = D.join(pd.DataFrame(listactivity, index=D.index, columns=['activityName']))
-        cols = D.columns.tolist()
-        cols = cols[1:] + cols[:1]
-        D = D[cols]
-        return D.sort_values(D.columns[2], ascending=False)
-
-    def contribution_analysis_direct_upstream_cutoffs(self, UUID, impact_category):
-        """ Contribution analysis for the IO complements of the hybrid LCI only"
-        Args:
-        ----
-            * UUID:             UUID of the process to examine
-            * impact_category:  impact category to examine (GWP, ODP, Acidification, Eutrophication, HTox)
-            """
-
-        if not impact_category:
-            print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
-            return
-
-        if impact_category == 'GWP100':
-            generic_impact_category_name = self.GWP100_CML2001
-        if impact_category == 'Acidification':
-            generic_impact_category_name = self.Acidification_CML2001
-        if impact_category == 'Eutrophication':
-            generic_impact_category_name = self.Eutrophication_CML2001
-        if impact_category == 'Human toxicity' or impact_category == 'HTox':
-            generic_impact_category_name = self.HTox_CML2001
-
-        for i in range(0, len(self.C_io)):
-            try:
-                if [self.C_io.index[i]] in generic_impact_category_name:
-                    name_category = [self.C_io.index[i]]
-            except NameError:
-                print('For impact categories, enter GWP100, Acidification, Eutrophication or HTox')
-
-        Y = pd.DataFrame(0.0, self.A_io_f.index, self.A_io.columns)
-        Identity = pd.DataFrame(np.eye(len(self.A_io)), index=self.A_io.index, columns=self.A_io.columns)
-        for i in range(0, len(Y)):
-            Y.iloc[i, i] = self.A_io_f.iloc[i, self.A_io_f.columns.get_loc(UUID)]
-        X = pd.DataFrame(np.linalg.solve(Identity - self.A_io, Y), index=self.A_io_f.index, columns=Y.columns)
-        D = pd.DataFrame(self.C_io.dot(self.F_io.dot(X)).loc[name_category, :]).transpose()
-        return D.sort_values(D.columns[0], ascending=False)
 
     def contribution_analysis(self, type_of_analysis, UUID, impact_category):
         """ Method to execute multiple types of contribution analyses.
@@ -1564,68 +1475,44 @@ class Analysis:
             X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
                                 axis=1),
-                 np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                 np.concatenate([self.A_io_f.values + self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
                 axis=0).astype(dtype='float32'),
                                 np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                         self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
                                                         self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
                                 )
 
-        elif type_of_analysis == 'on_capitals_only':
-            k = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - k,
-                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                        self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
-                                )
-
-        elif type_of_analysis == 'without_capitals':
-            a = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
-                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                        self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
-                                )
+        elif type_of_analysis == 'added_capitals':
+            Y = pd.DataFrame(0.0, self.A_io_f.index, self.A_io.columns)
+            for i in range(0, len(Y)):
+                Y.iloc[i, i] = self.K_io_f.iloc[i, self.K_io_f.columns.get_loc(UUID)]
+            X = np.linalg.solve(np.eye(len(self.K_io)) - (self.A_io.values+self.K_io.values), Y.values)
 
         elif type_of_analysis == 'origin':
-            a = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
-                                np.diag(self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)])
-                                )
+            X = np.linalg.solve(np.eye(len(self.A_ff)).astype(dtype='float32') - self.A_ff.values,
+                                np.diag(self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)]))
 
         elif type_of_analysis == 'added':
-            a = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
-                                np.diag(self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)])
-                                )
+            Y = pd.DataFrame(0.0, self.A_io_f.index, self.A_io.columns)
+            for i in range(0, len(Y)):
+                Y.iloc[i, i] = self.A_io_f.iloc[i, self.A_io_f.columns.get_loc(UUID)]
+            X = np.linalg.solve(np.eye(len(self.A_io)) - self.A_io.values, Y.values)
 
         elif type_of_analysis == 'both':
-            a = np.concatenate(
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
                  np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - a,
+                axis=0).astype(dtype='float32'),
                                 np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                         self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
                                 )
 
         else:
-            print('Enter the type_of_analysis desired: "total", "on_capitals_only" or "without_capitals"')
+            print('Enter the type_of_analysis desired: "total", "added_capitals", "origin", "added" or "both"')
             return
 
         name_impact_categories = self.check_impact_category(impact_category)
-        results = self.get_results(UUID, X, name_impact_categories)
+        results = self.get_results(UUID, X, name_impact_categories, type_of_analysis)
         return results
 
     def check_impact_category(self, impact_category):
@@ -1668,7 +1555,7 @@ class Analysis:
         list_to_return = [name_category_LCA, name_category_IO]
         return list_to_return
 
-    def get_results(self, uuid, x, name_categories):
+    def get_results(self, uuid, x, name_categories, type_of_analysis):
         """ Side method to get the emissions of a given production
 
         Args:
@@ -1682,71 +1569,44 @@ class Analysis:
             The ranked dataframe of impacts contribution
 
         """
-        matrix = self.F.copy()
-        matrix[:, self.PRO_f.index.get_loc(uuid) + 1:] = 0
-        matrix[:, :self.PRO_f.index.get_loc(uuid)] = 0
-        d = self.C.values.dot(self.F.dot(x) + matrix)
-        D = pd.DataFrame(d, index=self.C.index, columns=self.index_A)
-        df = pd.DataFrame(D.loc[name_categories[0], :]).join(D.loc[name_categories[1], :].transpose())
-        df['total'] = pd.DataFrame(
-            df.iloc[:, df.columns.get_loc(name_categories[0])] + df.iloc[:, df.columns.get_loc(name_categories[1][0])])
-        listproduct = [x for x in self.PRO_f.productName] + [float('nan')] * len(self.A_io)
-        listactivity = [x for x in self.PRO_f.activityName] + [float('nan')] * len(self.A_io)
-        df = df.join(pd.DataFrame(listproduct, index=df.index, columns=['productName']))
-        df = df.join(pd.DataFrame(listactivity, index=df.index, columns=['activityName']))
-        df = df.sort_values(by='total', ascending=False)
-        return df
 
-    def calc_Leontief_inverses(self, matrix):
+        if type_of_analysis in ['total', 'both']:
+            matrix = self.F.copy()
+            matrix[:, self.PRO_f.index.get_loc(uuid) + 1:] = 0
+            matrix[:, :self.PRO_f.index.get_loc(uuid)] = 0
+            d = self.C.values.dot(self.F.dot(x) + matrix)
+            D = pd.DataFrame(d, index=self.C.index, columns=self.index_A)
+            df = pd.DataFrame(D.loc[name_categories[0], :]).join(D.loc[name_categories[1], :].transpose())
+            df['total'] = pd.DataFrame(
+                df.iloc[:, df.columns.get_loc(name_categories[0])] + df.iloc[:, df.columns.get_loc(name_categories[1][0])])
+            listproduct = [x for x in self.PRO_f.productName] + [float('nan')] * len(self.A_io)
+            listactivity = [x for x in self.PRO_f.activityName] + [float('nan')] * len(self.A_io)
+            df = df.join(pd.DataFrame(listproduct, index=df.index, columns=['productName']))
+            df = df.join(pd.DataFrame(listactivity, index=df.index, columns=['activityName']))
+            df = df.sort_values(by='total', ascending=False)
+            return df
 
-        if matrix == 'L_A':
-            a = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                axis=0)
-            invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - a)
-            invert = invert.astype('float32')
+        elif type_of_analysis == 'origin':
+            matrix = self.F_f.copy().values
+            matrix[:, self.PRO_f.index.get_loc(uuid) + 1:] = 0
+            matrix[:, :self.PRO_f.index.get_loc(uuid)] = 0
+            d = self.C_f.fillna(0).values.dot(self.F_f.values.dot(x) + matrix)
+            D = pd.DataFrame(d, index=self.C_f.index, columns=self.A_ff.index)
+            df = pd.DataFrame(D.loc[name_categories[0], :])
+            listproduct = [x for x in self.PRO_f.productName]
+            listactivity = [x for x in self.PRO_f.activityName]
+            df = df.join(pd.DataFrame(listproduct, index=df.index, columns=['productName']))
+            df = df.join(pd.DataFrame(listactivity, index=df.index, columns=['activityName']))
+            df = df.reindex(['productName', 'activityName', name_categories[0]], axis=1)
+            df = df.sort_values(by=name_categories[0], ascending=False)
+            return df
 
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_' + self.capitals + '_capitals_' +
-                                                                      self.double_counting + '/L_A.pickle')),
-                           'wb') as f:
-                pickle.dump(invert, f)
-
-        if matrix == 'L_K':
-            k = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
-                 np.concatenate([self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0)
-            invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - k)
-            invert = invert.astype('float32')
-
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_' + self.capitals + '_capitals_' +
-                                                                      self.double_counting + '/L_K.pickle')),
-                           'wb') as f:
-                pickle.dump(invert, f)
-
-        if matrix == 'L_AK':
-            ak = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io)))], axis=1),
-                 np.concatenate([self.A_io_f.values + self.K_io_f.values, self.A_io.values + self.K_io.values],
-                                axis=1)],
-                axis=0)
-            invert = np.linalg.inv(np.eye(len(self.A_ff) + len(self.A_io)) - ak)
-            invert = invert.astype('float32')
-
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_' + self.capitals + '_capitals_' +
-                                                                      self.double_counting + '/L_AK.pickle')),
-                           'wb') as f:
-                pickle.dump(invert, f)
+        elif type_of_analysis in ['added', 'added_capitals']:
+            d = self.C_io.values.dot(self.F_io.values.dot(x))
+            D = pd.DataFrame(d, index=self.C_io.index, columns=self.A_io.index)
+            df = pd.DataFrame(D.loc[name_categories[1], :]).transpose()
+            df = df.sort_values(by=name_categories[1], ascending=False)
+            return df
 
     def get_available_impact_methods(self, impact_category):
 
