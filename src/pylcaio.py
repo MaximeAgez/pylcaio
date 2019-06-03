@@ -661,7 +661,9 @@ class LCAIO:
         self.total_prod_region = pd.DataFrame()
         self.total_prod_RoW = pd.DataFrame()
         self.dictRoW = {}
-        self.STAM_table = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/STAM_table.xlsx')).fillna(0)
+        self.STAM_table = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/STAM_table.xlsx'))
+        self.patching_exiobase = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/'
+                                                                                       'Exiobase_patchwork.xlsx'))
         self.H = pd.DataFrame()
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
@@ -806,10 +808,10 @@ class LCAIO:
             lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
             lambda_filter_matrix = lambda_filter_matrix.fillna(0)
-            if capitals_method == 'LCA' or capitals_method == 'IO':
-                # double counting of capitals must be corrected in K_io_f and not A_io_f
-                lambda_filter_matrix.loc[[i for i in lambda_filter_matrix.index
-                                          if i[1] in self.list_of_capital_sectors]] = 1
+            # if capitals_method == 'LCA' or capitals_method == 'IO':
+            #     # double counting of capitals must be corrected in K_io_f and not A_io_f
+            #     lambda_filter_matrix.loc[[i for i in lambda_filter_matrix.index
+            #                               if i[1] in self.list_of_capital_sectors]] = 1
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
 
             self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
@@ -822,10 +824,6 @@ class LCAIO:
             lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
             lambda_filter_matrix = lambda_filter_matrix.fillna(0)
-            if capitals_method == 'LCA' or capitals_method == 'IO':
-                # double counting of capitals must be corrected in K_io_f and not A_io_f
-                lambda_filter_matrix.loc[[i for i in lambda_filter_matrix.index
-                                          if i[1] in self.list_of_capital_sectors]] = 1
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
 
             self.G = pd.DataFrame(0, index=self.A_io.index.get_level_values('sector').tolist()[
@@ -836,13 +834,9 @@ class LCAIO:
             self.G = self.G.append([self.G] * (self.number_of_countries_IO + self.number_of_RoW_IO - 1))
             self.G.index = self.A_io_f.index
 
-            gamma_filter_matrix = self.G.dot(self.STAM_table.dot(self.G.transpose().dot(self.H)))
+            gamma_filter_matrix = self.G.dot((self.STAM_table.mul(self.patching_exiobase)).dot(self.G.transpose().
+                                                                                               dot(self.H)))
             gamma_filter_matrix[gamma_filter_matrix == self.number_of_countries_IO + self.number_of_RoW_IO] = 1
-
-            if capitals_method == 'LCA' or capitals_method == 'IO':
-                # double counting of capitals must be corrected in K_io_f and not A_io_f
-                gamma_filter_matrix.loc[[i for i in gamma_filter_matrix.index
-                                         if i[1] in self.list_of_capital_sectors]] = 1
 
             phi_filter_matrix = pd.DataFrame(1, index=self.A_io_f.index, columns=self.A_io_f.columns)
             categories_used_by_processes = self.G.transpose().dot(self.H.dot(self.A_ff_processed))
@@ -866,6 +860,11 @@ class LCAIO:
         if capitals_method == 'LCA':
             # K_io_f is defined the same as A_io_f
             self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+            # due to balancing in Exiobase, some weird inputs appear, which are removed here from capitals as well
+            patching = self.G.dot(self.patching_exiobase.dot(self.G.transpose().dot(self.H)))
+            patching[patching == self.number_of_countries_IO + self.number_of_RoW_IO] = 1
+            self.K_io_f = patching.mul(self.K_io_f)
             self.K_io_f = self.K_io_f.astype('float32')
 
             # the correction for double counting implies here to trust LCA capitals when present
@@ -886,6 +885,11 @@ class LCAIO:
         elif capitals_method == 'IO':
             # K_io_f is defined the same as A_io_f
             self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+            # due to balancing in Exiobase, some weird inputs appear, which are removed here from capitals as well
+            patching = self.G.dot(self.patching_exiobase.dot(self.G.transpose().dot(self.H)))
+            patching[patching == self.number_of_countries_IO + self.number_of_RoW_IO] = 1
+            self.K_io_f = patching.mul(self.K_io_f)
             self.K_io_f = self.K_io_f.astype('float32')
 
             # the correction for double counting implies here to only trust IO capital and not LCA's
@@ -1547,14 +1551,13 @@ class Analysis:
 
         """
 
-        name_impact_categories = self.check_impact_category(impact_category)
-
         if type_of_analysis == 'total':
-            ak = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
+                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
+                                axis=1),
                  np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - ak,
+                axis=0).astype(dtype='float32'),
                                 np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
                                                         self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)] +
                                                         self.K_io_f.values[:, self.PRO_f.index.get_loc(UUID)]], axis=0))
@@ -1575,7 +1578,7 @@ class Analysis:
             print('concatenating')
             a = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values #+ self.K_io.values
+                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values
                                  ], axis=1)],
                 axis=0).astype(dtype='float32')
             print('life-cycling LOL')
@@ -1585,9 +1588,10 @@ class Analysis:
                                 )
 
         else:
-            print('Enter the type_of_analysis desided')
+            print('Enter the type_of_analysis desired: "total", "on_capitals_only" or "without_capitals"')
             return
 
+        name_impact_categories = self.check_impact_category(impact_category)
         results = self.get_results(UUID, X, name_impact_categories)
         return results
 
@@ -1631,7 +1635,7 @@ class Analysis:
         list_to_return = [name_category_LCA, name_category_IO]
         return list_to_return
 
-    def get_results(self, UUID, X, name_categories):
+    def get_results(self, uuid, x, name_categories):
         """ Side method to get the emissions of a given production
 
         Args:
@@ -1646,9 +1650,9 @@ class Analysis:
 
         """
         matrix = self.F.copy()
-        matrix[:, self.PRO_f.index.get_loc(UUID) + 1:] = 0
-        matrix[:, :self.PRO_f.index.get_loc(UUID) - 1] = 0
-        d = self.C.values.dot(self.F.dot(X) + matrix)
+        matrix[:, self.PRO_f.index.get_loc(uuid) + 1:] = 0
+        matrix[:, :self.PRO_f.index.get_loc(uuid)] = 0
+        d = self.C.values.dot(self.F.dot(x) + matrix)
         D = pd.DataFrame(d, index=self.C.index, columns=self.index_A)
         df = pd.DataFrame(D.loc[name_categories[0], :]).join(D.loc[name_categories[1], :].transpose())
         df['total'] = pd.DataFrame(
