@@ -462,10 +462,11 @@ class DatabaseLoader:
                                                                         i] in self.PRO_f.index]]
         pivot1 = pd.pivot_table(technosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
                             values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum)
-        del pivot1.index.name
-        del pivot1.columns.name
-        pivot1 = self.LCA_convention_to_IO(pivot1)
-        self.A_ff.loc[pivot1.index, template_foreground_metadata.index] = pivot1
+        if not pivot1.empty:
+            del pivot1.index.name
+            del pivot1.columns.name
+            pivot1 = self.LCA_convention_to_IO(pivot1)
+            self.A_ff.loc[pivot1.index, template_foreground_metadata.index] = pivot1
 
         biosphere_exchanges = template_foreground_exchanges.loc[[i for i in template_foreground_exchanges.index if
                                                                     template_foreground_exchanges.input_output[
@@ -473,16 +474,18 @@ class DatabaseLoader:
 
         pivot2 = pd.pivot_table(biosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
                                 values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum)
-        del pivot2.index.name
-        del pivot2.columns.name
-        pivot2 = self.LCA_convention_to_IO(pivot2)
-        self.F_f.loc[pivot2.index, template_foreground_metadata.index] = pivot2
+        if not pivot2.empty:
+            del pivot2.index.name
+            del pivot2.columns.name
+            pivot2 = self.LCA_convention_to_IO(pivot2)
+            self.F_f.loc[pivot2.index, template_foreground_metadata.index] = pivot2
 
     def add_process_to_matrices(self, index):
         """ Creates an empty row and empty column for processes to add """
         self.A_ff[index] = 0
         self.A_ff = pd.concat([self.A_ff, pd.DataFrame(0, columns=self.A_ff.columns, index=[index])], sort=False)
         self.F_f[index] = 0
+        self.F_io_f[index] = 0
         # self.y_f[index] = 0
         # self.y_f.loc[index, index] = 1
 
@@ -718,6 +721,7 @@ class LCAIO:
         self.identify_rows()
         self.update_prices_electricity()
         self.calc_productions()
+        self.low_production_volume_processes()
         self.extend_inventory()
 
         self.A_io_f = pd.DataFrame(0.0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
@@ -1109,6 +1113,17 @@ class LCAIO:
             listlisteeee[i] = listadd
             listdffff[i] = pd.DataFrame(listlisteeee[i], listact, [list(self.dictRoW.keys())[i]])
             self.total_prod_RoW = self.total_prod_RoW.join(listdffff[i], how='outer')
+
+    def low_production_volume_processes(self):
+
+        list_low_prod_sectors = self.total_prod_country[self.total_prod_country < 10].dropna().index.tolist()
+
+        df = self.PRO_f.loc[[i for i in self.PRO_f.index if (self.PRO_f.io_geography[i], self.PRO_f.ProductTypeName[i])
+                             in list_low_prod_sectors and i in self.list_to_hyb]]
+        dict_ = ast.literal_eval(pkg_resources.resource_string(__name__, '/Data/Classing_countries.txt').decode('utf-8'))
+        for process in self.PRO_f.index:
+            if process in df.index:
+                self.PRO_f.io_geography[process] = dict_[self.PRO_f.io_geography[process]]
 
     def extend_inventory(self):
         """ Method creating a new technology matrix for the LCA database in which the inputs of processes not to
