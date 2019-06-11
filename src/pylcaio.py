@@ -465,7 +465,7 @@ class DatabaseLoader:
         if not pivot1.empty:
             del pivot1.index.name
             del pivot1.columns.name
-            pivot1 = self.LCA_convention_to_IO(pivot1)
+            pivot1 = LCA_convention_to_IO(pivot1)
             self.A_ff.loc[pivot1.index, template_foreground_metadata.index] = pivot1
 
         biosphere_exchanges = template_foreground_exchanges.loc[[i for i in template_foreground_exchanges.index if
@@ -477,7 +477,7 @@ class DatabaseLoader:
         if not pivot2.empty:
             del pivot2.index.name
             del pivot2.columns.name
-            pivot2 = self.LCA_convention_to_IO(pivot2)
+            pivot2 = LCA_convention_to_IO(pivot2)
             self.F_f.loc[pivot2.index, template_foreground_metadata.index] = pivot2
 
     def add_process_to_matrices(self, index):
@@ -488,14 +488,6 @@ class DatabaseLoader:
         self.F_io_f[index] = 0
         # self.y_f[index] = 0
         # self.y_f.loc[index, index] = 1
-
-    def LCA_convention_to_IO(self, dataframe):
-        """ Changes the convetion of an LCA technology matrix from LCA to IO """
-        # no ones on the diagonal
-        dataframe[dataframe == 1] = 0
-        # only positive values
-        dataframe = dataframe.abs()
-        return dataframe
 
     def qualitychecks(self):
         """ Several quality checks to ensure that data entered by the user in the numerous excel and text files
@@ -1724,4 +1716,13 @@ def template_sheet_treatment(dataframe):
     """ Removes empty rows and potential typos created Unnamed columns in the template """
     dataframe = dataframe.dropna(how='all', axis=0)
     dataframe = dataframe.drop([j for j in [i for i in dataframe.columns] if 'Unnamed' in j], axis=1)
+    return dataframe
+
+
+def LCA_convention_to_IO(dataframe):
+    """ Changes the convetion of an LCA technology matrix from LCA to IO """
+    # no ones on the diagonal
+    dataframe[dataframe == 1] = 0
+    # only positive values
+    dataframe = dataframe.abs()
     return dataframe
