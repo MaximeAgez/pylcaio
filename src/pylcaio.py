@@ -670,8 +670,11 @@ class LCAIO:
         self.H = pd.DataFrame()
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
+        self.K_io_f_uncorrected = pd.DataFrame()
         self.list_of_capital_sectors = ast.literal_eval(pkg_resources.resource_string(
             __name__, '/Data/List_of_capitals_goods.txt').decode('utf-8'))
+        self.aggregated_A_io = (self.A_io + self.K_io).groupby('sector', axis=1).sum()
+        self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
 
         self.double_counting = ''
         self.capitals = ''
@@ -720,17 +723,12 @@ class LCAIO:
 
         # ---- CONVERSION PART ------
 
-        # product concordance matrix
         self.H = pd.DataFrame(0, index=self.A_io.index.get_level_values('sector').tolist()[
                                        0:self.number_of_products_IO], columns=self.A_ff.columns, dtype='int64')
         for sector in self.H.index:
             self.H.loc[sector, self.H.columns.intersection(self.PRO_f[self.PRO_f.ProductTypeName == sector].index)] = 1
         self.H = self.H.append([self.H] * (self.number_of_countries_IO + self.number_of_RoW_IO - 1))
         self.H.index = self.A_io.index
-
-        # product concordance matrix filtered
-        H_for_hyb = self.H.copy()
-        H_for_hyb.loc[:, self.list_not_to_hyb] = 0
 
         # translate the geography concordance txt files into matrices
         matrix_countries_per_region = pd.DataFrame(0, index=self.listcountry,
@@ -801,8 +799,55 @@ class LCAIO:
 
         Geo = weighted_concordance_geography.dot(region_covered_per_process)
 
+        # product concordance matrix filtered
+        basic_H_for_hyb = self.H.copy()
+        basic_H_for_hyb.loc[:, self.list_not_to_hyb] = 0
+
         # the uncorrected A_io_f matrix is then defined by the following operation
-        self.A_io_f_uncorrected = self.A_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+        basic_A_io_f_uncorrected = self.A_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+        # ---- ADD-ONS -----
+
+        buildings_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                   'Construction work' and i in self.listguillotine], 'concrete',
+                                                  'Cement, lime and plaster', 'Construction work')
+        self.A_io_f_uncorrected = basic_A_io_f_uncorrected + self.A_io.dot(buildings_add_on[0] * inflation * Geo) * \
+                                  buildings_add_on[1]
+
+        transport_equipment_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                             == 'Other transport equipment' and i in self.listguillotine
+                                                             and 'aircraft' not in self.PRO_f.productName[i]], 'steel',
+                                                            'Basic iron and steel and of ferro-alloys and first '
+                                                            'products thereof', 'Other transport equipment')
+        self.A_io_f_uncorrected += self.A_io.dot(transport_equipment_add_on[0] * inflation * Geo) * \
+                                   transport_equipment_add_on[1]
+
+        air_transport_equipment_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                             == 'Other transport equipment' and i in self.listguillotine
+                                                             and 'aircraft' in self.PRO_f.productName[i]], 'aluminium',
+                                                                'Aluminium and aluminium products',
+                                                                'Other transport equipment')
+        self.A_io_f_uncorrected += self.A_io.dot(air_transport_equipment_add_on[0] * inflation * Geo) * \
+                                   air_transport_equipment_add_on[1]
+
+        machinery_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                   == 'Machinery and equipment n.e.c.' and i in self.listguillotine],
+                                                  'steel', 'Basic iron and steel and of ferro-alloys and first products'
+                                                           ' thereof', 'Machinery and equipment n.e.c.')
+        self.A_io_f_uncorrected += self.A_io.dot(machinery_add_on[0] * inflation * Geo) * machinery_add_on[1]
+
+        air_transportation_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                   == 'Air transport services' and i in self.listguillotine],
+                                                  'kerosene', 'Kerosene Type Jet Fuel', 'Air transport services')
+        self.A_io_f_uncorrected += self.A_io.dot(air_transportation_add_on[0] * inflation * Geo) *\
+                                   air_transportation_add_on[1]
+
+        rail_transportation_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                   == 'Railway transportation services' and i in self.listguillotine],
+                                                  'electricity', 'Electricity', 'Railway transportation services')
+        self.A_io_f_uncorrected += self.A_io.dot(rail_transportation_add_on[0] * inflation * Geo) * \
+                                   rail_transportation_add_on[1]
+
         self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
 
         # ------ DOUBLE COUNTING PART -------
@@ -863,13 +908,61 @@ class LCAIO:
 
         if capitals_method == 'LCA':
             # K_io_f is defined the same as A_io_f
-            self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+            basic_K_io_f = self.K_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+            buildings_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                 'Construction work' and i in self.listguillotine], 'concrete',
+                'Cement, lime and plaster', 'Construction work')
+            self.K_io_f_uncorrected = basic_K_io_f + self.K_io.dot(buildings_add_on[0] * inflation * Geo) * \
+                                      buildings_add_on[1]
+
+            transport_equipment_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Other transport equipment' and i in self.listguillotine
+                 and 'aircraft' not in self.PRO_f.productName[i]], 'steel',
+                'Basic iron and steel and of ferro-alloys and first '
+                'products thereof', 'Other transport equipment')
+            self.K_io_f_uncorrected += self.K_io.dot(transport_equipment_add_on[0] * inflation * Geo) * \
+                                       transport_equipment_add_on[1]
+
+            air_transport_equipment_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Other transport equipment' and i in self.listguillotine
+                 and 'aircraft' in self.PRO_f.productName[i]], 'aluminium',
+                'Aluminium and aluminium products',
+                'Other transport equipment')
+            self.K_io_f_uncorrected += self.K_io.dot(air_transport_equipment_add_on[0] * inflation * Geo) * \
+                                       air_transport_equipment_add_on[1]
+
+            machinery_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                            == 'Machinery and equipment n.e.c.' and i in self.listguillotine],
+                                                           'steel',
+                                                           'Basic iron and steel and of ferro-alloys and first products'
+                                                           ' thereof', 'Machinery and equipment n.e.c.')
+            self.K_io_f_uncorrected += self.K_io.dot(machinery_add_on[0] * inflation * Geo) * machinery_add_on[1]
+
+            air_transportation_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Air transport services' and i in self.listguillotine],
+                'kerosene', 'Kerosene Type Jet Fuel', 'Air transport services')
+            self.K_io_f_uncorrected += self.K_io.dot(air_transportation_add_on[0] * inflation * Geo) * \
+                                       air_transportation_add_on[1]
+
+            rail_transportation_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Railway transportation services' and i in self.listguillotine],
+                'electricity', 'Electricity', 'Railway transportation services')
+            self.K_io_f_uncorrected += self.K_io.dot(rail_transportation_add_on[0] * inflation * Geo) * \
+                                       rail_transportation_add_on[1]
+
+            self.K_io_f_uncorrected = self.K_io_f_uncorrected.astype(dtype='float32')
 
             # due to balancing in Exiobase, some weird inputs appear, which are removed here from capitals as well
             patching = self.G.dot(self.patching_exiobase.dot(self.G.transpose().dot(self.H)))
             patching[patching == self.number_of_countries_IO + self.number_of_RoW_IO] = 1
-            self.K_io_f = patching.mul(self.K_io_f)
-            self.K_io_f = self.K_io_f.astype('float32')
+            self.K_io_f_uncorrected = patching.mul(self.K_io_f_uncorrected)
+            self.K_io_f_uncorrected = self.K_io_f_uncorrected.astype('float32')
 
             # the correction for double counting implies here to trust LCA capitals when present
             lambda_filter_matrix = self.H.dot(self.A_ff_processed)
@@ -877,7 +970,7 @@ class LCAIO:
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
             lambda_filter_matrix = lambda_filter_matrix.fillna(0)
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
-            self.K_io_f = self.K_io_f.multiply(lambda_filter_matrix)
+            self.K_io_f = self.K_io_f_uncorrected.multiply(lambda_filter_matrix)
 
             # Since we endogenized capitals we need to remove them from both final demand and factors of production
             self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
@@ -888,13 +981,61 @@ class LCAIO:
 
         elif capitals_method == 'IO':
             # K_io_f is defined the same as A_io_f
-            self.K_io_f = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+            basic_K_io_f = self.K_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+            buildings_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                 'Construction work' and i in self.listguillotine], 'concrete',
+                'Cement, lime and plaster', 'Construction work')
+            self.K_io_f_uncorrected = basic_K_io_f + self.K_io.dot(buildings_add_on[0] * inflation * Geo) * \
+                                      buildings_add_on[1]
+
+            transport_equipment_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Other transport equipment' and i in self.listguillotine
+                 and 'aircraft' not in self.PRO_f.productName[i]], 'steel',
+                'Basic iron and steel and of ferro-alloys and first '
+                'products thereof', 'Other transport equipment')
+            self.K_io_f_uncorrected += self.K_io.dot(transport_equipment_add_on[0] * inflation * Geo) * \
+                                       transport_equipment_add_on[1]
+
+            air_transport_equipment_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Other transport equipment' and i in self.listguillotine
+                 and 'aircraft' in self.PRO_f.productName[i]], 'aluminium',
+                'Aluminium and aluminium products',
+                'Other transport equipment')
+            self.K_io_f_uncorrected += self.K_io.dot(air_transport_equipment_add_on[0] * inflation * Geo) * \
+                                       air_transport_equipment_add_on[1]
+
+            machinery_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                            == 'Machinery and equipment n.e.c.' and i in self.listguillotine],
+                                                           'steel',
+                                                           'Basic iron and steel and of ferro-alloys and first products'
+                                                           ' thereof', 'Machinery and equipment n.e.c.')
+            self.K_io_f_uncorrected += self.K_io.dot(machinery_add_on[0] * inflation * Geo) * machinery_add_on[1]
+
+            air_transportation_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Air transport services' and i in self.listguillotine],
+                'kerosene', 'Kerosene Type Jet Fuel', 'Air transport services')
+            self.K_io_f_uncorrected += self.K_io.dot(air_transportation_add_on[0] * inflation * Geo) * \
+                                       air_transportation_add_on[1]
+
+            rail_transportation_add_on = self.extract_scaling_vector(
+                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                 == 'Railway transportation services' and i in self.listguillotine],
+                'electricity', 'Electricity', 'Railway transportation services')
+            self.K_io_f_uncorrected += self.K_io.dot(rail_transportation_add_on[0] * inflation * Geo) * \
+                                       rail_transportation_add_on[1]
+
+            self.K_io_f_uncorrected = self.K_io_f_uncorrected.astype(dtype='float32')
 
             # due to balancing in Exiobase, some weird inputs appear, which are removed here from capitals as well
             patching = self.G.dot(self.patching_exiobase.dot(self.G.transpose().dot(self.H)))
             patching[patching == self.number_of_countries_IO + self.number_of_RoW_IO] = 1
-            self.K_io_f = patching.mul(self.K_io_f)
-            self.K_io_f = self.K_io_f.astype('float32')
+            self.K_io_f_uncorrected = patching.mul(self.K_io_f_uncorrected)
+            self.K_io_f_uncorrected = self.K_io_f_uncorrected.astype('float32')
 
             # the correction for double counting implies here to only trust IO capital and not LCA's
             self.A_ff.loc[[i for i in self.PRO_f.index if self.PRO_f.ProductTypeName[i] in
@@ -1140,6 +1281,69 @@ class LCAIO:
 
         # the inversion brings a lot of noise which falsely contributes to double counting which is why it is removed
         self.A_ff_processed[self.A_ff_processed < 10 ** -16] = 0
+
+    def extract_scaling_vector(self, list_add_on_to_hyb, scaling_parameter, sector_of_scaling_parameter,
+                               sector_of_add_ons):
+
+        add_on_H_for_hyb = self.H.copy()
+        add_on_H_for_hyb.loc[:, [i for i in add_on_H_for_hyb.columns if i not in list_add_on_to_hyb]] = 0
+
+        dff = self.extract_flow_amounts(list_add_on_to_hyb, scaling_parameter)
+
+        scaling_vector = self.PRO_f.price.copy()
+        scaling_vector.loc[:] = 0
+        if sector_of_scaling_parameter == 'Electricity':
+            list_electricities = ['Electricity by Geothermal','Electricity by biomass and waste','Electricity by coal',
+                                  'Electricity by gas','Electricity by hydro','Electricity by nuclear',
+                                  'Electricity by petroleum and other oil derivatives','Electricity by solar photovoltaic',
+                                  'Electricity by solar thermal','Electricity by tide, wave, ocean','Electricity by wind',
+                                  'Electricity nec']
+            scaling_vector.loc[dff.index] = (dff / (
+                    self.aggregated_A_io.loc[list_electricities, sector_of_add_ons].sum() /
+                    self.aggregated_A_io.loc[:, sector_of_add_ons].sum())).iloc[:, 0]
+        else:
+            scaling_vector.loc[dff.index] = (dff / (
+                    self.aggregated_A_io.loc[sector_of_scaling_parameter, sector_of_add_ons] /
+                    self.aggregated_A_io.loc[:, sector_of_add_ons].sum())).iloc[:, 0]
+        return add_on_H_for_hyb, scaling_vector
+
+    def extract_flow_amounts(self, list_of_uuids, flow):
+        """This function extracts the amount (in euros) necessary for the determination of a scaling vector
+        from the list of uuids passed as an argument
+
+        Args:
+        ----
+            list_of_uuids: a list of UUIDs from which to extract the scaling vector values
+            scaling_parameter: the name of the flow on which to scale (possible values: 'concrete','steel','kerosene','aluminium','electricity')
+
+        Returns:
+        -------
+            a dataframe of the values of concrete/cement per UUID
+        """
+        dictt = {}
+        for element in list_of_uuids:
+            dict_ = {}
+            amount = 0
+            dff = self.A_ff.loc[:, element]
+            for index in dff.index:
+                if dff[index] != 0:
+                    dict_[index] = dff[index]
+            for key in dict_.keys():
+                if flow == 'concrete':
+                    if 'concrete' in self.PRO_f.productName[key] or 'cement, unspecified' in\
+                            self.PRO_f.productName[key]:
+                        amount += dict_[key] * self.PRO_f.price[key]
+                    elif 'building, hall' in self.PRO_f.productName[key]:
+                        # 0.3m3 is the amount of concrete per m2 of building hall, 185 is the price of 1m3 of concrete
+                        amount += 0.3 * dict_[key] * 185
+                elif flow == 'steel':
+                    if 'steel' in self.PRO_f.productName[key] or 'cast iron' in self.PRO_f.productName[key]:
+                        amount += dict_[key] * self.PRO_f.price[key]
+                else:
+                    if flow in self.PRO_f.productName[key]:
+                        amount += dict_[key] * self.PRO_f.price[key]
+            dictt[element] = amount
+        return pd.DataFrame(list(dictt.values()), index=list(dictt.keys()))
 
     # -------------------------- EXPORT RESULTS -----------------------------------
 
@@ -1704,7 +1908,7 @@ def get_inflation(reference_year):
 
 def sum_elements_list(liste):
     concatenated_list = []
-    for i in range(0,len(liste)):
+    for i in range(0, len(liste)):
         if isinstance(liste[i], list):
             concatenated_list += liste[i]
         else:
