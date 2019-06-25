@@ -87,7 +87,6 @@
               'Other Liquid Biofuels',
               'Crude petroleum and services related to crude oil extraction, excluding surveying'],
 'Machinery': ['Machinery and equipment n.e.c.',
-              'Office machinery and computers',
               'Electrical machinery and apparatus n.e.c.',
               'Radio, television and communication equipment and apparatus',
               'Medical, precision and optical instruments, watches and clocks',
@@ -108,6 +107,8 @@
               'Secondary other non-ferrous metals for treatment, Re-processing of secondary other non-ferrous metals into new other non-ferrous metals',
               'Secondary preciuos metals for treatment, Re-processing of secondary preciuos metals into new preciuos metals',
               'Secondary raw materials'],
+'Office equipment': ['Office machinery and computers',
+	      'Furniture; other manufactured goods n.e.c.'],
 'Ores/stone': ['Uranium and thorium ores',
               'Iron ores',
               'Copper ores and concentrates',
@@ -196,5 +197,4 @@
               'Textiles waste for treatment: landfill',
               'Wood waste for treatment: landfill'],
 'Wood': ['Wood and products of wood and cork (except furniture); articles of straw and plaiting materials',
-              'Wood material for treatment, Re-processing of secondary wood material into new wood material',
-              'Furniture; other manufactured goods n.e.c.']}
+              'Wood material for treatment, Re-processing of secondary wood material into new wood material']}
