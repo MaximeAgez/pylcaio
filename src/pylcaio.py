@@ -1122,8 +1122,7 @@ class LCAIO:
          """
 
         electricity_price = pd.read_excel(pkg_resources.resource_stream(__name__,
-                                                                        '/Data/Regionalized_electricity_prices.xlsx'),
-                                                                        'price_used')
+                                                                        '/Data/Regionalized_electricity_prices.xlsx'))
 
         electricity_processes = self.PRO_f.price.loc[
             [i for i in self.PRO_f.index if
@@ -1134,21 +1133,12 @@ class LCAIO:
             print('Empty!')
             return
 
-        electricity_price.region = electricity_price.region.ffill()
-        electricity_price.columns = ['io_geography', 'ProductTypeName', 'prices']
-
-        merged = self.PRO_f.loc[electricity_processes.index.values, ['price', 'io_geography', 'ProductTypeName']].merge(
-            electricity_price, on=['io_geography', 'ProductTypeName'], how='left')
-        real_price = []
-        for index in merged.index:
-            if not merged.prices[index] < 0 and not merged.prices[index] > 0:
-                real_price.append(merged.price[index])
-            else:
-                real_price.append(merged.prices[index])
-        merged['price'] = real_price
+        merged = self.PRO_f.loc[electricity_processes.index.values, ['price', 'io_geography']].merge(
+            electricity_price, left_on=['io_geography'], right_on=electricity_price.index, how='left')
+        merged.prices[merged.prices.isnull()] = merged.price
         merged.index = electricity_processes.index.values
-        merged = merged.drop(['prices', 'io_geography'], axis=1)
-        self.PRO_f.price.update(merged.price)
+        merged = merged.drop(['price', 'io_geography'], axis=1)
+        self.PRO_f.price.update(merged.prices)
 
     def calc_productions(self):
         """ Calculates the different total productions for either countries, regions or RoWs
