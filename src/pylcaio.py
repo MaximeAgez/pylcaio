@@ -1122,8 +1122,8 @@ class LCAIO:
          """
 
         electricity_price = pd.read_excel(pkg_resources.resource_stream(__name__,
-                                                                        '/Data/Regionalized_electricity_prices.xlsx',
-                                                                        'price_used'))
+                                                                        '/Data/Regionalized_electricity_prices.xlsx'),
+                                                                        'price_used')
 
         electricity_processes = self.PRO_f.price.loc[
             [i for i in self.PRO_f.index if
