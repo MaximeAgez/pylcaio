@@ -891,15 +891,18 @@ class LCAIO:
             self.extract_scaling_vector_biosphere('Wood', 'incineration', inflation, Geo)
             self.extract_scaling_vector_biosphere('Oil/hazardous', 'incineration', inflation, Geo)
 
-            self.extract_scaling_vector_biosphere('Food', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Paper', 'landfill', inflation, Geo)
             self.extract_scaling_vector_biosphere('Plastic', 'landfill', inflation, Geo)
             self.extract_scaling_vector_biosphere('Inert/metal/hazardous', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Textiles', 'landfill', inflation, Geo)
             self.extract_scaling_vector_biosphere('Wood', 'landfill', inflation, Geo)
 
-            self.extract_scaling_vector_biosphere('Food', 'waste water treatment', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Other', 'waste water treatment', inflation, Geo)
+            # self.extract_scaling_vector_biosphere('Food', 'waste water treatment', inflation, Geo)
+            # self.extract_scaling_vector_biosphere('Other', 'waste water treatment', inflation, Geo)
+
+            #self.extract_scaling_vector_biosphere('Food', 'biogasification and land application', inflation, Geo)
+            #self.extract_scaling_vector_biosphere('Sewage sludge', 'biogasification and land application', inflation,
+            #                                      Geo)
+            self.extract_scaling_vector_biosphere('Food', 'composting and land application', inflation, Geo)
+            self.extract_scaling_vector_biosphere('Paper and wood', 'composting and land application', inflation, Geo)
 
             self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
 
@@ -1322,7 +1325,9 @@ class LCAIO:
 
         add_on_H_for_hyb.loc[:, [i for i in add_on_H_for_hyb.columns if i not in list_add_on_to_hyb]] = 0
 
-        if treatment == 'incineration':
+        if (treatment in ['incineration', 'biogasification and land application'] or
+                (treatment == 'composting and land application'
+                 and what_is_treated == 'Paper and wood')):
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, False)
         else:
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, True)
@@ -1330,9 +1335,14 @@ class LCAIO:
         scaling_vector = self.PRO_f.price.copy()
         scaling_vector.loc[:] = 0
         list_CO2_extensions = [i for i in self.F_io.index if 'CO2' in i]
-        scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
-                                                                         ' waste for treatment: ' + str(treatment)].
-                                                sum() /self.number_of_countries_IO)).iloc[:, 0]
+        if what_is_treated == 'Sewage sludge':
+            scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
+                                                                             ' for treatment: ' + str(treatment)].
+                                                    sum() /self.number_of_countries_IO)).iloc[:, 0]
+        else:
+            scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
+                                                                             ' waste for treatment: ' + str(treatment)].
+                                                    sum() /self.number_of_countries_IO)).iloc[:, 0]
 
         self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(add_on_H_for_hyb * inflation * Geo) * scaling_vector
 
