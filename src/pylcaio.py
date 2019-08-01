@@ -1393,7 +1393,7 @@ class LCAIO:
 
     # -------------------------- EXPORT RESULTS -----------------------------------
 
-    def save_system(self):
+    def save_system(self, format):
         """ Export the hybridized database to dataframe via pickle
 
         Returns:
@@ -1422,12 +1422,18 @@ class LCAIO:
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
                                                          '_with_capitals_STAM/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_with_capitals_STAM/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
+            if format == 'pickle':
+                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                          self.lca_database_name_and_version + '_' +
+                                                                          self.io_database_name_and_version +
+                                                                          '_with_capitals_STAM/hybrid_system.pickle')),
+                               'wb') as f:
+                    pickle.dump(hybrid_system, f)
+            elif format == 'csv':
+                self.A_io_f.to_csv(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                   self.lca_database_name_and_version + '_' +
+                                                                   self.io_database_name_and_version +
+                                                                   '_with_capitals_STAM/A_io_f.csv'))
         elif self.capitals and self.double_counting == 'binary':
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
@@ -1443,12 +1449,18 @@ class LCAIO:
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
                                                          '_with_capitals_binary/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_with_capitals_binary/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
+            if format == 'pickle':
+                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                          self.lca_database_name_and_version + '_' +
+                                                                          self.io_database_name_and_version +
+                                                                          '_with_capitals_binary/hybrid_system.pickle')),
+                               'wb') as f:
+                    pickle.dump(hybrid_system, f)
+            elif format == 'csv':
+                self.A_io_f.to_csv(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                   self.lca_database_name_and_version + '_' +
+                                                                   self.io_database_name_and_version +
+                                                                   '_with_capitals_binary/A_io_f.csv'))
         elif not self.capitals and self.double_counting == 'STAM':
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
@@ -1464,12 +1476,18 @@ class LCAIO:
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
                                                          '_no_capitals_STAM/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_STAM/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
+            if format == 'pickle':
+                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                          self.lca_database_name_and_version + '_' +
+                                                                          self.io_database_name_and_version +
+                                                                          '_no_capitals_STAM/hybrid_system.pickle')),
+                               'wb') as f:
+                    pickle.dump(hybrid_system, f)
+            elif format == 'csv':
+                self.A_io_f.to_csv(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                   self.lca_database_name_and_version + '_' +
+                                                                   self.io_database_name_and_version +
+                                                                   '_no_capitals_STAM/A_io_f.csv'))
         elif not self.capitals and self.double_counting == 'binary':
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
@@ -1485,12 +1503,18 @@ class LCAIO:
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
                                                          '_no_capitals_binary/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_binary/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
+            if format == 'pickle':
+                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                          self.lca_database_name_and_version + '_' +
+                                                                          self.io_database_name_and_version +
+                                                                          '_no_capitals_binary/hybrid_system.pickle')),
+                               'wb') as f:
+                    pickle.dump(hybrid_system, f)
+            elif format == 'csv':
+                self.A_io_f.to_csv(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                   self.lca_database_name_and_version + '_' +
+                                                                   self.io_database_name_and_version +
+                                                                   '_no_capitals_binary/A_io_f.csv'))
 
 
 class Analysis:
