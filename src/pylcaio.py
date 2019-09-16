@@ -29,10 +29,9 @@ import gzip
 import pickle
 import ast
 import pkg_resources
-import time
+from time import time
 
 pd.set_option('mode.chained_assignment', None)
-
 
 # pylint: disable-msg=C0103
 
@@ -167,13 +166,14 @@ class DatabaseLoader:
         if self.io_database_name_and_version not in versions_of_exiobase:
             print('The IO database version you entered is not supported currently')
 
-    def combine_ecoinvent_exiobase(self, path_to_io_database='', path_to_capitals=''):
+    def combine_ecoinvent_exiobase(self, path_to_io_database='', path_to_capitals='', complete_extensions=False):
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args
         ---
             * path_to_io_database   : the path leading to the io database folder (only required if using  exiobase2)
             * path_to_capitals      : the path leading to the capitals new matrix (only required if wanting to
                                       endogenize capitals)
+            * complete_extensions   : boolean (True to complete exiobase3 extensions based on USEEIO extension)
         """
 
         version_ecoinvent = extract_version_from_name(self.lca_database_name_and_version)
@@ -282,6 +282,26 @@ class DatabaseLoader:
             self.C_io = self.C_io.reindex(self.F_io.index, axis=1)
             self.C_io = self.C_io.astype(dtype='float32')
             self.reference_year_IO = int(self.IO_database.meta.description[-4:])
+
+            if complete_extensions:
+                with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Completed_extensions_exio3/'
+                                                                         'S_completed.pickle'), 'rb') as f:
+                    F_extensions = pd.read_pickle(f)
+                with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Completed_extensions_exio3/'
+                                                                         'C_completed_in_CML.pickle'), 'rb') as f:
+                    C_extensions = pd.read_pickle(f)
+
+                self.F_io = self.F_io.drop([i for i in self.IO_database.satellite.unit.index if
+                                            self.IO_database.satellite.unit.loc[i][0] in ['kg', 'kg CO2-eq']], axis=0)
+                self.F_io = pd.concat([self.F_io, F_extensions])
+                self.F_io = self.F_io.reindex(self.A_io.index, axis=1)
+
+                self.C_io = self.C_io.drop([i for i in self.IO_database.satellite.unit.index if
+                                            self.IO_database.satellite.unit.loc[i][0] in ['kg', 'kg CO2-eq']], axis=1)
+                self.C_io = self.C_io.drop([i for i in self.C_io.index if
+                                            self.C_io.loc[[i]].sum(axis=1)[0] == 0], axis=0)
+                self.C_io = pd.concat([self.C_io, C_extensions.transpose()], axis=1, sort=False).fillna(0)
+                self.C_io = self.C_io.reindex(self.F_io.index, axis=1)
 
         self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
 
@@ -650,6 +670,7 @@ class LCAIO:
         self.STR_io = pd.DataFrame()
 
         self.K_io = pd.DataFrame()
+        self.K_io_f = pd.DataFrame()
 
         self.io_categories = defaultdict(list)
         self.categories_same_functionality = []
@@ -687,6 +708,7 @@ class LCAIO:
         self.H = pd.DataFrame()
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
+        self.K_io_f_uncorrected = pd.DataFrame()
         self.aggregated_A_io = pd.DataFrame()
         self.aggregated_F_io = pd.DataFrame()
         self.add_on_H_scaled_vector = pd.DataFrame()
@@ -696,6 +718,7 @@ class LCAIO:
         self.double_counting = ''
         self.capitals = ''
         self.description = []
+        self.basic_A_io_f_uncorrected = pd.DataFrame()
 
         allowed_keys = list(self.__dict__.keys())
         self.__dict__.update((key, value) for key, value in kwargs.items() if key in allowed_keys)
@@ -729,10 +752,12 @@ class LCAIO:
         self.identify_rows()
         self.update_prices_electricity()
         self.calc_productions()
+        self.correct_inconsistencies()
         self.low_production_volume_processes()
         self.extend_inventory()
 
         self.A_io_f = pd.DataFrame(0.0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
+        self.K_io_f = pd.DataFrame(0.0, index=self.A_io.index, columns=self.A_ff.columns, dtype='float32')
 
         # ---- CONVERSION PART ------
 
@@ -815,154 +840,35 @@ class LCAIO:
         Geo = weighted_concordance_geography.dot(region_covered_per_process)
 
         # product concordance matrix filtered
-        basic_H_for_hyb = self.H.copy()
-        basic_H_for_hyb.loc[:, self.list_not_to_hyb] = 0
+        H_for_hyb = self.H.copy()
+        H_for_hyb.loc[:, self.list_not_to_hyb] = 0
+
+        self.A_io_f_uncorrected = self.A_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+        # ---- HYBRIDIZATION WITHOUT PRICES ------
+
+        self.apply_scaling_without_prices()
+
+        self.A_io_f_uncorrected = self.A_io_f_uncorrected + self.A_io.dot(
+            self.add_on_H_scaled_vector * inflation * Geo)
+        self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
 
         if capitals:
+            self.K_io_f_uncorrected = self.K_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
 
-            # the uncorrected A_io_f matrix is then defined by the following operation
-            basic_A_io_f_uncorrected = (self.A_io + self.K_io).dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
+            self.apply_scaling_without_prices()
 
-            # The following lines of code are introducing add-ons to enable hybridization bypassing bad price quality
-            self.add_on_H_scaled_vector = pd.DataFrame(0, self.H.index, self.H.columns)
-            self.aggregated_A_io = (self.A_io + self.K_io).groupby('sector', axis=1).sum()
-            self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
-            self.aggregated_F_io = self.F_io.groupby(level=1, axis=1).sum()
-
-            self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-                                                      'Construction work' and i in self.listguillotine],
-                                                     'concrete',
-                                                     'Cement, lime and plaster',
-                                                     'Construction work')
-
-            self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]==
-                                                      'Other transport equipment' and i in self.listguillotine
-                                                      and 'aircraft' not in self.PRO_f.productName[i]],
-                                                     'steel',
-                                                     'Basic iron and steel and of ferro-alloys and first products thereof',
-                                                     'Other transport equipment')
-
-            self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-                                                      'Other transport equipment' and i in self.listguillotine and
-                                                      'aircraft' in self.PRO_f.productName[i]],
-                                                     'aluminium',
-                                                     'Aluminium and aluminium products',
-                                                     'Other transport equipment')
-
-            self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]==
-                                                      'Machinery and equipment n.e.c.' and i in self.listguillotine],
-                                                     'steel',
-                                                     'Basic iron and steel and of ferro-alloys and first products thereof',
-                                                     'Machinery and equipment n.e.c.')
-
-            self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-                                                      'Air transport services' and i in self.listguillotine],
-                                                     'kerosene',
-                                                     'Kerosene Type Jet Fuel',
-                                                     'Air transport services')
-
-            self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-                                                      'Railway transportation services' and i in self.listguillotine],
-                                                     'energy',
-                                                     'Energy',
-                                                     'Railway transportation services')
-
-            self.extract_scaling_vector_biosphere('Food', 'incineration')
-            self.extract_scaling_vector_biosphere('Paper', 'incineration')
-            self.extract_scaling_vector_biosphere('Plastic', 'incineration')
-            self.extract_scaling_vector_biosphere('Intert/metal', 'incineration')
-            self.extract_scaling_vector_biosphere('Textiles', 'incineration')
-            self.extract_scaling_vector_biosphere('Wood', 'incineration')
-            self.extract_scaling_vector_biosphere('Oil/hazardous', 'incineration')
-
-            self.extract_scaling_vector_biosphere('Plastic', 'landfill')
-            self.extract_scaling_vector_biosphere('Inert/metal/hazardous', 'landfill')
-            self.extract_scaling_vector_biosphere('Wood', 'landfill')
-
-            # self.extract_scaling_vector_biosphere('Food', 'waste water treatment')
-            # self.extract_scaling_vector_biosphere('Other', 'waste water treatment')
-
-            # self.extract_scaling_vector_biosphere('Food', 'biogasification and land application')
-            # self.extract_scaling_vector_biosphere('Sewage sludge', 'biogasification and land application')
-
-            self.extract_scaling_vector_biosphere('Food', 'composting and land application')
-            self.extract_scaling_vector_biosphere('Paper and wood', 'composting and land application')
-
-            # all the previous calls to extract_scaling functions were updating the self.add_on_H_scaled_vector, where
-            # each column of this matrix contains the scaling factor to use and from which sector to extrapolate
-            self.A_io_f_uncorrected = basic_A_io_f_uncorrected + (self.A_io + self.K_io).dot(
+            self.K_io_f_uncorrected = self.K_io_f_uncorrected + self.K_io.dot(
                 self.add_on_H_scaled_vector * inflation * Geo)
-            self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
-
+            self.K_io_f_uncorrected = self.K_io_f_uncorrected.astype(dtype='float32')
             self.description.append('Capitals endogenized')
             self.capitals = True
 
-        else:
-            # the uncorrected A_io_f matrix is then defined by the following operation
-            basic_A_io_f_uncorrected = self.A_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
+            # Since we endogenized capitals we need to remove them from both final demand and factors of production
+            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
+            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
 
-            # The following lines of code are introducing add-ons to enable hybridization bypassing bad price quality
-            # self.aggregated_A_io = self.A_io.groupby('sector', axis=1).sum()
-            # self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
-            #
-            # buildings_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-            #      'Construction work' and i in self.listguillotine], 'concrete',
-            #     'Cement, lime and plaster', 'Construction work')
-            # self.A_io_f_uncorrected = basic_A_io_f_uncorrected + self.A_io.dot(buildings_add_on[0] *
-            #                                                                                inflation * Geo) *\
-            #                           buildings_add_on[1]
-            # del buildings_add_on
-            # del basic_A_io_f_uncorrected
-            #
-            # transport_equipment_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Other transport equipment' and i in self.listguillotine
-            #      and 'aircraft' not in self.PRO_f.productName[i]], 'steel',
-            #     'Basic iron and steel and of ferro-alloys and first '
-            #     'products thereof', 'Other transport equipment')
-            # self.A_io_f_uncorrected += self.A_io.dot(transport_equipment_add_on[0] * inflation * Geo) * \
-            #                            transport_equipment_add_on[1]
-            # del transport_equipment_add_on
-            #
-            # air_transport_equipment_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Other transport equipment' and i in self.listguillotine
-            #      and 'aircraft' in self.PRO_f.productName[i]], 'aluminium',
-            #     'Aluminium and aluminium products',
-            #     'Other transport equipment')
-            # self.A_io_f_uncorrected += self.A_io.dot(air_transport_equipment_add_on[0] * inflation * Geo) * \
-            #                            air_transport_equipment_add_on[1]
-            # del air_transport_equipment_add_on
-            #
-            # machinery_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #                                                 == 'Machinery and equipment n.e.c.' and i in self.listguillotine],
-            #                                                'steel',
-            #                                                'Basic iron and steel and of ferro-alloys and first products'
-            #                                                ' thereof', 'Machinery and equipment n.e.c.')
-            # self.A_io_f_uncorrected += self.A_io.dot(machinery_add_on[0] * inflation * Geo) * machinery_add_on[1]
-            # del machinery_add_on
-            #
-            # air_transportation_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Air transport services' and i in self.listguillotine],
-            #     'kerosene', 'Kerosene Type Jet Fuel', 'Air transport services')
-            # self.A_io_f_uncorrected += self.A_io.dot(air_transportation_add_on[0] * inflation * Geo) * \
-            #                            air_transportation_add_on[1]
-            # del air_transportation_add_on
-            #
-            # rail_transportation_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Railway transportation services' and i in self.listguillotine],
-            #     'energy', 'Energy', 'Railway transportation services')
-            # self.A_io_f_uncorrected += self.A_io.dot(rail_transportation_add_on[0] * inflation * Geo) * \
-            #                            rail_transportation_add_on[1]
-            # del rail_transportation_add_on
-
-            # REMOVE AFTER
-            self.A_io_f_uncorrected = self.A_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
-            self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
-
+        elif not capitals:
             self.capitals = False
             self.description.append('Capitals were not endogenized')
 
@@ -980,6 +886,7 @@ class LCAIO:
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
 
             self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
+            self.K_io_f = self.K_io_f_uncorrected.multiply(lambda_filter_matrix)
 
             self.double_counting = 'binary'
             self.description.append('binary')
@@ -1017,12 +924,12 @@ class LCAIO:
                 gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.A_io_f_uncorrected)))
             self.A_io_f = self.A_io_f.astype(dtype='float32')
 
+            self.K_io_f = phi_filter_matrix.multiply(
+                gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.K_io_f_uncorrected)))
+            self.K_io_f = self.K_io_f.astype(dtype='float32')
+
             self.double_counting = 'STAM'
             self.description.append('STAM')
-
-            # Since we endogenized capitals we need to remove them from both final demand and factors of production
-            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
-            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
 
     # ---------------------PREPARATIONS FOR THE HYBRIDIZATION----------------------
 
@@ -1218,6 +1125,27 @@ class LCAIO:
             listdffff[i] = pd.DataFrame(listlisteeee[i], listact, [list(self.dictRoW.keys())[i]])
             self.total_prod_RoW = self.total_prod_RoW.join(listdffff[i], how='outer')
 
+    def correct_inconsistencies(self):
+        """ While introducing the completed extensions of EXIOBASE based on USEEIO, some missing emissions are added
+        to sectors which in reality produce no products. For these sectors, the added emissions are put back to zero."""
+
+        self.F_io = self.F_io.drop(
+            self.F_io.loc[:, [i for i in self.F_io.columns if self.total_prod_country.loc[i][0] == 0]].columns,
+            axis=1)
+
+        self.F_io = pd.concat([
+            self.F_io,
+            pd.DataFrame(0,
+                         index=self.F_io.index,
+                         columns=self.A_io.loc[:, [i for i in self.A_io.columns if
+                                                   self.total_prod_country.loc[i][0] == 0]].columns)],
+            axis=1)
+
+        self.F_io = self.F_io.reindex(self.A_io.columns, axis=1)
+
+        self.F_io = self.F_io.groupby(self.F_io.index, sort=False).sum()
+        self.F_io_f = self.F_io_f.groupby(self.F_io_f.index, sort=False).sum()
+
     def low_production_volume_processes(self):
 
         list_low_prod_sectors = self.total_prod_country[self.total_prod_country < 10].dropna().index.tolist()
@@ -1308,20 +1236,30 @@ class LCAIO:
         list_add_on_to_hyb = [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
              == str(what_is_treated) + ' waste for treatment: ' + str(treatment) and (i in self.listguillotine or
                                                                                      self.null_price)
-             and 'market for' not in self.PRO_f.activityName[i] and i not in self.list_to_hyb]
+             and 'market for' not in self.PRO_f.activityName[i] and i not in self.list_to_hyb
+                              and 'open' not in self.PRO_f.activityName[i]]
 
         add_on_H_for_hyb.loc[:, [i for i in add_on_H_for_hyb.columns if i not in list_add_on_to_hyb]] = 0
 
-        if (treatment in ['incineration', 'biogasification and land application'] or
-                (treatment == 'composting and land application'
-                 and what_is_treated == 'Paper and wood')):
-            dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, False)
-        else:
+        biogenic_sectors = ['Other waste for treatment: waste water treatment',
+                            'Food waste for treatment: waste water treatment',
+                            'Paper waste for treatment: landfill',
+                            'Food waste for treatment: landfill',
+                            'Wood waste for treatment: landfill',
+                            'Food waste for treatment: composting and land application',
+                            'Wood waste for treatment: incineration',
+                            'Food waste for treatment: incineration',
+                            'Paper waste for treatment: incineration']
+
+        if str(what_is_treated) + ' for treatment: ' + str(treatment) in biogenic_sectors:
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, True)
+            list_CO2_extensions = [i for i in self.F_io.index if 'CO2' in i and 'non-fossil' in i]
+        else:
+            dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, False)
+            list_CO2_extensions = [i for i in self.F_io.index if 'CO2' in i and 'non-fossil' not in i]
 
         scaling_vector = self.PRO_f.price.copy()
         scaling_vector.loc[:] = 0
-        list_CO2_extensions = [i for i in self.F_io.index if 'CO2' in i]
         if what_is_treated == 'Sewage sludge':
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
                                                                              ' for treatment: ' + str(treatment)].
@@ -1385,17 +1323,89 @@ class LCAIO:
             a dataframe of the values of the desired flow (concrete, steel, etc.) per UUID
         """
         if biogenic:
-            keyword = [i for i in self.F_f.index if 'Carbon dioxide' in self.STR_f.FULLNAME[i]]
+            keyword = [i for i in self.F_f.index if
+                       ('Carbon dioxide' in self.STR_f.FULLNAME[i] and 'non-fossil' in self.STR_f.FULLNAME[i])]
         else:
             keyword = [i for i in self.F_f.index if
                        ('Carbon dioxide' in self.STR_f.FULLNAME[i] and 'non-fossil' not in self.STR_f.FULLNAME[i])]
         return pd.DataFrame(self.F_f.loc[keyword, list_of_uuids].sum())
 
+    def apply_scaling_without_prices(self):
+        # The following lines of code are introducing add-ons to enable hybridization bypassing bad price quality
+        self.add_on_H_scaled_vector = pd.DataFrame(0, self.H.index, self.H.columns)
+
+        # keep A+K cause we are looking at all the concrete (so renovation + construction)
+        self.aggregated_A_io = (self.A_io + self.K_io).groupby('sector', axis=1).sum()
+        self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
+        self.aggregated_F_io = self.F_io.groupby(level=1, axis=1).sum()
+
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Construction work' and i in self.listguillotine],
+                                                 'concrete',
+                                                 'Cement, lime and plaster',
+                                                 'Construction work')
+
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Other transport equipment' and i in self.listguillotine
+                                                  and 'aircraft' not in self.PRO_f.productName[i]],
+                                                 'steel',
+                                                 'Basic iron and steel and of ferro-alloys and first products thereof',
+                                                 'Other transport equipment')
+
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Other transport equipment' and i in self.listguillotine and
+                                                  'aircraft' in self.PRO_f.productName[i]],
+                                                 'aluminium',
+                                                 'Aluminium and aluminium products',
+                                                 'Other transport equipment')
+
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Machinery and equipment n.e.c.' and i in self.listguillotine],
+                                                 'steel',
+                                                 'Basic iron and steel and of ferro-alloys and first products thereof',
+                                                 'Machinery and equipment n.e.c.')
+
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Air transport services' and i in self.listguillotine],
+                                                 'kerosene',
+                                                 'Kerosene Type Jet Fuel',
+                                                 'Air transport services')
+
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Railway transportation services' and i in self.listguillotine],
+                                                 'energy',
+                                                 'Energy',
+                                                 'Railway transportation services')
+
+        self.extract_scaling_vector_biosphere('Food', 'incineration')
+        self.extract_scaling_vector_biosphere('Paper', 'incineration')
+        self.extract_scaling_vector_biosphere('Plastic', 'incineration')
+        self.extract_scaling_vector_biosphere('Intert/metal', 'incineration')
+        self.extract_scaling_vector_biosphere('Textiles', 'incineration')
+        self.extract_scaling_vector_biosphere('Wood', 'incineration')
+        self.extract_scaling_vector_biosphere('Oil/hazardous', 'incineration')
+
+        self.extract_scaling_vector_biosphere('Plastic', 'landfill')
+        self.extract_scaling_vector_biosphere('Inert/metal/hazardous', 'landfill')
+        self.extract_scaling_vector_biosphere('Wood', 'landfill')
+
+        self.extract_scaling_vector_biosphere('Food', 'waste water treatment')
+        self.extract_scaling_vector_biosphere('Other', 'waste water treatment')
+
+        self.extract_scaling_vector_biosphere('Food', 'biogasification and land application')
+        self.extract_scaling_vector_biosphere('Sewage sludge', 'biogasification and land application')
+
+        self.extract_scaling_vector_biosphere('Food', 'composting and land application')
+        self.extract_scaling_vector_biosphere('Paper and wood', 'composting and land application')
+
     # -------------------------- EXPORT RESULTS -----------------------------------
 
     def save_system(self, format):
-        """ Export the hybridized database to dataframe via pickle
+        """ Export the hybridized database to dataframe via pickle or csv
 
+        Args:
+        -----
+                format: 'pickle' to return results as a pickle / 'csv' to return the A_io_f matrix as a csv file
         Returns:
         --------
             A pickle of the hybrid system exported to the corresponding folder in the pylcaio package
@@ -1404,7 +1414,7 @@ class LCAIO:
 
         hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                          'F_f': self.F_f, 'F_io': self.F_io, 'F_io_f': self.F_io_f,
-                         'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                         'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io, 'K_io_f' : self.K_io_f,
                          'list_to_hyb': self.list_to_hyb, 'description': self.description}
 
         if self.capitals and self.double_counting == 'STAM':
@@ -1593,6 +1603,7 @@ class Analysis:
         self.C_f = self.hybrid_system['C_f']
         self.C_io = self.hybrid_system['C_io']
         self.K_io = self.hybrid_system['K_io']
+        self.K_io_f = self.hybrid_system['K_io_f']
         self.list_to_hyb = self.hybrid_system['list_to_hyb']
         self.description = self.hybrid_system['description']
 
@@ -1614,6 +1625,7 @@ class Analysis:
         np.fill_diagonal(self.y, 1, wrap=False)
 
         self.d = pd.DataFrame()
+        self.d_k = pd.DataFrame()
 
         self.GWP100_CML2001 = ast.literal_eval(
             pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
@@ -1659,14 +1671,16 @@ class Analysis:
             ak = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
                                 axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
+                 np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values+self.K_io.values], axis=1)],
                 axis=0).astype(dtype='float32')
             x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak, self.y)
+            # need to do total - only A to capture value chain interaction between A and K (cannot just take K)
             d = self.C.values.dot(self.F).dot(x)
             self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
+
             print('Calculations done! Results are contained in self.d')
 
-        if not self.capitals:
+        else:
             a = np.concatenate(
                 [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
                                 axis=1),
