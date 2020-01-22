@@ -166,7 +166,8 @@ class DatabaseLoader:
         if self.io_database_name_and_version not in versions_of_exiobase:
             print('The IO database version you entered is not supported currently')
 
-    def combine_ecoinvent_exiobase(self, path_to_io_database='', path_to_capitals='', complete_extensions=False):
+    def combine_ecoinvent_exiobase(self, path_to_io_database='', path_to_capitals='', complete_extensions=False,
+                                   impact_world=False):
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args
         ---
@@ -287,21 +288,33 @@ class DatabaseLoader:
                 with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Completed_extensions_exio3/'
                                                                          'S_completed.pickle'), 'rb') as f:
                     F_extensions = pd.read_pickle(f)
-                with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Completed_extensions_exio3/'
-                                                                         'C_completed_in_CML.pickle'), 'rb') as f:
-                    C_extensions = pd.read_pickle(f)
 
                 self.F_io = self.F_io.drop([i for i in self.IO_database.satellite.unit.index if
                                             self.IO_database.satellite.unit.loc[i][0] in ['kg', 'kg CO2-eq']], axis=0)
                 self.F_io = pd.concat([self.F_io, F_extensions])
                 self.F_io = self.F_io.reindex(self.A_io.index, axis=1)
 
-                self.C_io = self.C_io.drop([i for i in self.IO_database.satellite.unit.index if
-                                            self.IO_database.satellite.unit.loc[i][0] in ['kg', 'kg CO2-eq']], axis=1)
-                self.C_io = self.C_io.drop([i for i in self.C_io.index if
-                                            self.C_io.loc[[i]].sum(axis=1)[0] == 0], axis=0)
-                self.C_io = pd.concat([self.C_io, C_extensions.transpose()], axis=1, sort=False).fillna(0)
-                self.C_io = self.C_io.reindex(self.F_io.index, axis=1)
+                if not impact_world:
+                    with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Completed_extensions_exio3/'
+                                                                             'C_completed_in_CML.pickle'), 'rb') as f:
+                        C_extensions = pd.read_pickle(f)
+
+                    self.C_io = self.C_io.drop([i for i in self.IO_database.satellite.unit.index if
+                                                self.IO_database.satellite.unit.loc[i][0] in ['kg', 'kg CO2-eq']], axis=1)
+                    self.C_io = self.C_io.drop([i for i in self.C_io.index if
+                                                self.C_io.loc[[i]].sum(axis=1)[0] == 0], axis=0)
+                    self.C_io = pd.concat([self.C_io, C_extensions.transpose()], axis=1, sort=False).fillna(0)
+                    self.C_io = self.C_io.reindex(self.F_io.index, axis=1)
+                else:
+                    with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Characterization_matrix_IW+/'
+                                                                             'EXIOBASE_not_regionalized.pickle'),
+                                   'rb') as f:
+                        self.C_io = pd.read_pickle(f)
+
+                    with gzip.open(pkg_resources.resource_filename(__name__, '/Data/Characterization_matrix_IW+/'
+                                                                             'Ecoinvent_not_regionalized.pickle'),
+                                   'rb') as f:
+                        self.C_f = pd.read_pickle(f)
 
         self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
 
@@ -924,9 +937,10 @@ class LCAIO:
                 gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.A_io_f_uncorrected)))
             self.A_io_f = self.A_io_f.astype(dtype='float32')
 
-            self.K_io_f = phi_filter_matrix.multiply(
-                gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.K_io_f_uncorrected)))
-            self.K_io_f = self.K_io_f.astype(dtype='float32')
+            if capitals:
+                self.K_io_f = phi_filter_matrix.multiply(
+                    gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.K_io_f_uncorrected)))
+                self.K_io_f = self.K_io_f.astype(dtype='float32')
 
             self.double_counting = 'STAM'
             self.description.append('STAM')
@@ -1156,7 +1170,8 @@ class LCAIO:
             pkg_resources.resource_string(__name__, '/Data/Classing_countries.txt').decode('utf-8'))
         for process in self.PRO_f.index:
             if process in df.index:
-                self.PRO_f.io_geography[process] = dict_[self.PRO_f.io_geography[process]]
+                if dict_[self.PRO_f.io_geography[process]] == 'RER':
+                    self.PRO_f.io_geography[process] = dict_[self.PRO_f.io_geography[process]]
 
     def extend_inventory(self):
         """ Method creating a new technology matrix for the LCA database in which the inputs of processes not to
@@ -1414,7 +1429,7 @@ class LCAIO:
 
         hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                          'F_f': self.F_f, 'F_io': self.F_io, 'F_io_f': self.F_io_f,
-                         'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io, 'K_io_f' : self.K_io_f,
+                         'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io, 'K_io_f': self.K_io_f,
                          'list_to_hyb': self.list_to_hyb, 'description': self.description}
 
         if self.capitals and self.double_counting == 'STAM':
@@ -1625,7 +1640,8 @@ class Analysis:
         np.fill_diagonal(self.y, 1, wrap=False)
 
         self.d = pd.DataFrame()
-        self.d_k = pd.DataFrame()
+        self.d_vanilla = pd.DataFrame()
+        self.d_extensions = pd.DataFrame()
 
         self.GWP100_CML2001 = ast.literal_eval(
             pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
@@ -1674,9 +1690,17 @@ class Analysis:
                  np.concatenate([self.A_io_f.values+self.K_io_f.values, self.A_io.values+self.K_io.values], axis=1)],
                 axis=0).astype(dtype='float32')
             x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak, self.y)
-            # need to do total - only A to capture value chain interaction between A and K (cannot just take K)
-            d = self.C.values.dot(self.F).dot(x)
-            self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
+
+            F_vanilla = pd.DataFrame(self.F, index=self.F_f.index.tolist()+self.F_io.index.tolist(),
+                                     columns=self.A_ff.index.tolist()+self.A_io.index.tolist())
+            F_extensions = F_vanilla.copy()
+            F_vanilla.loc[[i for i in F_vanilla.index if '*' in i]] = 0
+            F_extensions.loc[[i for i in F_vanilla.index if '*' not in i]] = 0
+
+            d_vanilla = self.C.values.dot(F_vanilla).dot(x)
+            d_extensions = self.C.values.dot(F_extensions).dot(x)
+            self.d_vanilla = pd.DataFrame(d_vanilla, self.C.index, self.A_ff.columns)
+            self.d_extensions = pd.DataFrame(d_extensions, self.C.index, self.A_ff.columns)
 
             print('Calculations done! Results are contained in self.d')
 
