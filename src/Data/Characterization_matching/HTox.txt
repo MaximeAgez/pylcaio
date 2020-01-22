@@ -1,1 +1,3 @@
-['CML 2001; human toxicity; HTP 100a; kg 1,4-DC.',[('Problem oriented approach: non baseline (CML, 2001)','human toxicity (HTP100)','HTP 100 (Huijbregts, 1999 & 2000)','kg 1,4-dichlorobenzene eq.')]]
+['CML 2001; human toxicity; HTP 100a; kg 1,4-DC.',
+[('Problem oriented approach: non baseline (CML, 2001)','human toxicity (HTP100)','HTP 100 (Huijbregts, 1999 & 2000)','kg 1,4-dichlorobenzene eq.')],
+['Human Health - Respiratory Effects','Human Health Cancer','Human Health Noncancer']]
