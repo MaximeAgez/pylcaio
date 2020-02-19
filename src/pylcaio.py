@@ -122,8 +122,8 @@ class DatabaseLoader:
         self.IMP = pd.DataFrame()
         self.C_f = pd.DataFrame()
         self.C_io = pd.DataFrame()
-        self.C_regio_f = pd.DataFrame()
-        self.C_regio_io = pd.DataFrame()
+        self.C_f_regio = pd.DataFrame()
+        self.C_io_regio = pd.DataFrame()
         self.STR_f = pd.DataFrame()
         self.K_io = pd.DataFrame()
         self.X_io = pd.DataFrame()
@@ -356,14 +356,15 @@ class DatabaseLoader:
                 print('Only the imapct world+ method supports regionalization. '
                       'Please pass the corresponding argument as True')
             else:
+                self.description.append('Regionalized flows/impacts available')
                 # load regionalized characterization matrices
-                self.C_regio_io = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
                     __name__, '/Data/Characterization_matrix_IW+/Exiobase_regionalized.npz'))
                 self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
                         __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_exiobase.txt'), 'r').read())
                 self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
                         __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_exiobase_flows.txt'), 'r').read())
-                self.C_regio_f = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
                     __name__, '/Data/Characterization_matrix_IW+/Ecoinvent_regionalized.npz'))
                 self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
                         __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_ecoinvent.txt'), 'r').read())
@@ -384,7 +385,6 @@ class DatabaseLoader:
                 F_io_regio_dict = self.F_io_regio.to_dict()
 
                 for sector in F_io_regio_dict:
-
                     for flow in F_io_regio_dict[sector].keys():
                         if flow[1] != sector[0]:
                             F_io_regio_dict[sector][flow] = 0
@@ -422,16 +422,24 @@ class DatabaseLoader:
                 del F
                 # remove regionalized characterization from standard characterization matrices
                 self.C_f = pd.DataFrame(self.C_f.todense(), self.extended_impact_names_IW_eco, self.STR_f.MATRIXID)
-                self.C_f.drop(self.regionalized_impact_names_eco, axis=0, inplace=True)
-                for regionalized_flow in self.regionalized_impact_names_eco:
-                    self.extended_impact_names_IW_eco.remove(regionalized_flow)
+                regionalized_flows = set([i[0] for i in self.regionalized_flow_names_eco])
+                for category in self.regionalized_impact_names_eco:
+                    # identify flows that have an impact for the given category
+                    impacting_flows = self.C_f.loc[category][self.C_f.loc[category] != 0].index.tolist()
+                    # if they are characterized with the regionalized matrix, set them to zero
+                    self.C_f.loc[
+                        category, [i for i in impacting_flows if i in regionalized_flows]] = 0
                 self.C_f = back_to_sparse(self.C_f)
                 self.C_io = pd.DataFrame(self.C_io.todense(), self.extended_impact_names_IW_exio,
                                          self.extended_flows_names)
-                self.C_io.drop(self.regionalized_impact_names_exio, axis=0, inplace=True)
-                for regionalized_flow in self.regionalized_impact_names_exio:
-                    self.extended_impact_names_IW_exio.remove(regionalized_flow)
+                for category in self.regionalized_impact_names_exio:
+                    impacting_flows = self.C_io.loc[category][
+                        self.C_io.loc[category] != 0].index.tolist()
+                    self.C_io.loc[category, [i for i in impacting_flows if i in set(
+                        [i[0] for i in self.regionalized_flow_names_exio])]] = 0
                 self.C_io = back_to_sparse(self.C_io)
+        else:
+            self.description.append('Regionalized flows/impacts unavailable')
         # CAPITAL GOODS
         if path_to_capitals == '':
             print('No path for the capital folder was provided. Capitals will not be endogenized')
@@ -593,7 +601,12 @@ class DatabaseLoader:
                      impact_methods_IO=self.impact_methods_IO, extended_flows_names=self.extended_flows_names,
                      extended_impact_names_CML=self.extended_impact_names_CML,
                      extended_impact_names_IW_exio=self.extended_impact_names_IW_exio,
-                     extended_impact_names_IW_eco=self.extended_impact_names_IW_eco, description=self.description)
+                     extended_impact_names_IW_eco=self.extended_impact_names_IW_eco, C_io_regio=self.C_io_regio,
+                     C_f_regio=self.C_f_regio, F_io_regio=self.F_io_regio, F_f_regio=self.F_f_regio,
+                     regionalized_impact_names_exio=self.regionalized_impact_names_exio,
+                     regionalized_impact_names_eco=self.regionalized_impact_names_eco,
+                     regionalized_flow_names_exio=self.regionalized_flow_names_exio,
+                     regionalized_flow_names_eco=self.regionalized_flow_names_eco,  description=self.description)
 
     def read_template(self):
         template_foreground_metadata = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
@@ -797,6 +810,10 @@ class LCAIO:
         self.STR_f = pd.DataFrame()
         self.IMP = pd.DataFrame()
         self.X_io = pd.DataFrame()
+        self.C_io_regio = pd.DataFrame()
+        self.C_f_regio= pd.DataFrame()
+        self.F_io_regio = pd.DataFrame()
+        self.F_f_regio = pd.DataFrame()
 
         self.K_io = pd.DataFrame()
         self.K_io_f = pd.DataFrame()
@@ -813,6 +830,10 @@ class LCAIO:
         self.extended_impact_names_CML = []
         self.extended_impact_names_IW_exio = []
         self.extended_impact_names_IW_eco = []
+        self.regionalized_impact_names_exio = []
+        self.regionalized_impact_names_eco = []
+        self.regionalized_flow_names_exio = []
+        self.regionalized_flow_names_eco = []
 
         self.listcountry = []
         self.listregions = []
@@ -1296,17 +1317,21 @@ class LCAIO:
         null_production_sectors = [i for i in pd.MultiIndex.from_product(
             [self.regions_of_IO, self.sectors_of_IO]) if self.total_prod_country.loc[i][0] == 0]
 
-        self.F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names,
-                                 pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
+        if 'Environmental extensions were completed' in self.description:
+            self.F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names,
+                                     pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
+            self.F_io = self.F_io.drop(self.F_io.loc[:, null_production_sectors].columns, axis=1)
+            self.F_io = pd.concat(
+                [self.F_io, pd.DataFrame(0, index=self.F_io.index, columns=null_production_sectors)], axis=1)
+            self.F_io = self.F_io.reindex(pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]), axis=1)
+            self.F_io = back_to_sparse(self.F_io)
 
-        self.F_io = self.F_io.drop(self.F_io.loc[:, null_production_sectors].columns, axis=1)
-
-        self.F_io = pd.concat(
-            [self.F_io, pd.DataFrame(0, index=self.F_io.index, columns=null_production_sectors)], axis=1)
-
-        self.F_io = self.F_io.reindex(pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]), axis=1)
-
-        self.F_io = scipy.sparse.csr_matrix(self.F_io)
+        if 'Regionalized flows/impacts available' in self.description:
+            self.F_io_regio = pd.DataFrame(self.F_io_regio.todense(), self.regionalized_flow_names_exio,
+                                           pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO],
+                                                                      names=['region', 'sector']))
+            self.F_io_regio.loc[:, null_production_sectors] = 0
+            self.F_io_regio = back_to_sparse(self.F_io_regio)
 
     def low_production_volume_processes(self):
 
@@ -1604,7 +1629,8 @@ class LCAIO:
         """
 
         if ('Environmental extensions were completed' in self.description and
-                'Impact World+ was used' in self.description):
+                'Impact World+ was used' in self.description and
+                'Regionalized flows/impacts available' not in self.description):
             hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                              'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
                              'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
@@ -1620,6 +1646,19 @@ class LCAIO:
                              'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                              'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                              'IMP': self.IMP.to_dict(), 'impact_categories_IO': self.extended_impact_names_CML}
+        elif 'Regionalized flows/impacts available' in self.description:
+            hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                             'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                             'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                             'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                             'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                             'impact_categories_IO': self.extended_impact_names_IW_exio,
+                             'impact_categories_eco': self.extended_impact_names_IW_eco, 'F_f_regio': self.F_f_regio,
+                             'C_io_regio': self.C_io_regio, 'F_io_regio': self.F_io_regio, 'C_f_regio': self.C_f_regio,
+                             'regionalized_flow_names_eco': self.regionalized_flow_names_eco,
+                             'regionalized_flow_names_exio': self.regionalized_flow_names_exio,
+                             'regionalized_impact_names_eco': self.regionalized_impact_names_eco,
+                             'regionalized_impact_names_exio': self.regionalized_impact_names_exio}
         else:
             hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                              'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
@@ -1628,97 +1667,121 @@ class LCAIO:
                              'flows_of_IO': self.flows_of_IO, 'impact_categories_IO': self.impact_methods_IO,
                              'IMP': self.IMP.to_dict(), 'STR': self.STR_f.to_dict()}
 
-        if self.capitals and self.double_counting == 'STAM':
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_with_capitals_STAM/')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_STAM/'))
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_with_capitals_STAM/__init__.py')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_STAM/__init__.py'))
-            if format == 'pickle':
-                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                          self.lca_database_name_and_version + '_' +
-                                                                          self.io_database_name_and_version +
-                                                                          '_with_capitals_STAM/hybrid_system.pickle')),
-                               'wb') as f:
-                    pickle.dump(hybrid_system, f)
+        if not os.path.exists(pkg_resources.resource_filename(
+                __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version)):
+            os.mkdir(pkg_resources.resource_filename(
+                __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version))
 
-        elif self.capitals and self.double_counting == 'binary':
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_with_capitals_binary/')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_binary/'))
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_wtih_capitals_binary/__init__.py')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_binary/__init__.py'))
-            if format == 'pickle':
-                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                          self.lca_database_name_and_version + '_' +
-                                                                          self.io_database_name_and_version +
-                                                                          '_with_capitals_binary/hybrid_system.pickle')),
-                               'wb') as f:
-                    pickle.dump(hybrid_system, f)
+        if not os.path.exists(pkg_resources.resource_filename(
+                __name__, '/Databases/' + self.lca_database_name_and_version + '_' +
+                          self.io_database_name_and_version + '/__init__.py')):
+            os.mkdir(pkg_resources.resource_filename(
+                __name__, '/Databases/' + self.lca_database_name_and_version + '_' +
+                          self.io_database_name_and_version + '/__init__.py'))
 
-        elif not self.capitals and self.double_counting == 'STAM':
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_STAM/')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_STAM/'))
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_STAM/__init__.py')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_STAM/__init__.py'))
-            if format == 'pickle':
-                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                          self.lca_database_name_and_version + '_' +
-                                                                          self.io_database_name_and_version +
-                                                                          '_no_capitals_STAM/hybrid_system.pickle')),
-                               'wb') as f:
-                    pickle.dump(hybrid_system, f)
+        file = open(pkg_resources.resource_filename(
+            __name__, '/Databases/' + self.lca_database_name_and_version + '_' +
+                      self.io_database_name_and_version+'/description_system.txt'), 'w')
+        file.write(str(self.description))
+        file.close()
 
-        elif not self.capitals and self.double_counting == 'binary':
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_binary/')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_binary/'))
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_binary/__init__.py')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_binary/__init__.py'))
-            if format == 'pickle':
-                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                          self.lca_database_name_and_version + '_' +
-                                                                          self.io_database_name_and_version +
-                                                                          '_no_capitals_binary/hybrid_system.pickle')),
-                               'wb') as f:
-                    pickle.dump(hybrid_system, f)
+        if format == 'pickle':
+            with gzip.open((pkg_resources.resource_filename(
+                    __name__, '/Databases/' + self.lca_database_name_and_version + '_' +
+                              self.io_database_name_and_version + '/hybrid_system.pickle')), 'wb') as f:
+                pickle.dump(hybrid_system, f)
+
+        # if self.capitals and self.double_counting == 'STAM':
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_with_capitals_STAM/')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_with_capitals_STAM/'))
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_with_capitals_STAM/__init__.py')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_with_capitals_STAM/__init__.py'))
+        #     if format == 'pickle':
+        #         with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                   self.lca_database_name_and_version + '_' +
+        #                                                                   self.io_database_name_and_version +
+        #                                                                   '_with_capitals_STAM/hybrid_system.pickle')),
+        #                        'wb') as f:
+        #             pickle.dump(hybrid_system, f)
+        #
+        # elif self.capitals and self.double_counting == 'binary':
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_with_capitals_binary/')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_with_capitals_binary/'))
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_wtih_capitals_binary/__init__.py')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_with_capitals_binary/__init__.py'))
+        #     if format == 'pickle':
+        #         with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                   self.lca_database_name_and_version + '_' +
+        #                                                                   self.io_database_name_and_version +
+        #                                                                   '_with_capitals_binary/hybrid_system.pickle')),
+        #                        'wb') as f:
+        #             pickle.dump(hybrid_system, f)
+        #
+        # elif not self.capitals and self.double_counting == 'STAM':
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_no_capitals_STAM/')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_no_capitals_STAM/'))
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_no_capitals_STAM/__init__.py')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_no_capitals_STAM/__init__.py'))
+        #     if format == 'pickle':
+        #         with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                   self.lca_database_name_and_version + '_' +
+        #                                                                   self.io_database_name_and_version +
+        #                                                                   '_no_capitals_STAM/hybrid_system.pickle')),
+        #                        'wb') as f:
+        #             pickle.dump(hybrid_system, f)
+        #
+        # elif not self.capitals and self.double_counting == 'binary':
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_no_capitals_binary/')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_no_capitals_binary/'))
+        #     if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                     self.lca_database_name_and_version + '_' +
+        #                                                                     self.io_database_name_and_version +
+        #                                                                     '_no_capitals_binary/__init__.py')):
+        #         os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
+        #                                                  '_' + self.io_database_name_and_version +
+        #                                                  '_no_capitals_binary/__init__.py'))
+        #     if format == 'pickle':
+        #         with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+        #                                                                   self.lca_database_name_and_version + '_' +
+        #                                                                   self.io_database_name_and_version +
+        #                                                                   '_no_capitals_binary/hybrid_system.pickle')),
+        #                        'wb') as f:
+        #             pickle.dump(hybrid_system, f)
 
 
 class Analysis:
@@ -1740,52 +1803,21 @@ class Analysis:
 
     """
 
-    def __init__(self, lca_database_name_and_version, io_database_name_and_version, method_double_counting,
-                 capitals=False):
+    def __init__(self, lca_database_name_and_version, io_database_name_and_version, path_to_hybrid_system):
 
         self.lca_database_name_and_version = lca_database_name_and_version
         self.io_database_name_and_version = io_database_name_and_version
 
-        if capitals and method_double_counting == 'STAM':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_with_capitals_STAM/hybrid_system.pickle')),
-                           'rb') as f:
+        try:
+            with gzip.open(path_to_hybrid_system, 'rb') as f:
                 self.hybrid_system = pd.read_pickle(f)
-            self.capitals = True
-            self.double_counting = 'STAM'
-        elif capitals and method_double_counting == 'binary':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_with_capitals_binary/hybrid_system.pickle')),
-                           'rb') as f:
-                self.hybrid_system = pd.read_pickle(f)
-            self.capitals = True
-            self.double_counting = 'binary'
-        elif not capitals and method_double_counting == 'STAM':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_STAM/hybrid_system.pickle')),
-                           'rb') as f:
-                self.hybrid_system = pd.read_pickle(f)
-            self.capitals = False
-            self.double_counting = 'STAM'
-        elif not capitals and method_double_counting == 'binary':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_binary/hybrid_system.pickle')),
-                           'rb') as f:
-                self.hybrid_system = pd.read_pickle(f)
-            self.capitals = False
-            self.double_counting = 'binary'
-        else:
-            print('Please enter the method to correct double counting with which the database you wish to analyze '
-                  'was hybridized')
-            self.capitals = False
+        except FileNotFoundError:
+            print('The path entered does not lead to the required hybrid_system.pickle file.')
+        try:
+            self.description = eval(open(path_to_hybrid_system.split('/hybrid_system.pickle')[0]+
+                                         '/description_system.txt').read())
+        except FileNotFoundError:
+            print('Please put the description_system.txt file in the same folder as your hybrid_system.pickle file')
 
         self.PRO_f = self.hybrid_system['PRO_f']
         self.A_ff = self.hybrid_system['A_ff']
@@ -1804,27 +1836,54 @@ class Analysis:
         self.regions_of_IO = self.hybrid_system['regions_of_IO']
         self.sectors_of_IO = self.hybrid_system['sectors_of_IO']
         self.impact_categories_IO = self.hybrid_system['impact_categories_IO']
-        try:
+        if 'Impact World+ was used' not in self.description:
             self.IMP = self.hybrid_system['IMP']
-        except KeyError:
+        else:
             self.impact_categories_eco = self.hybrid_system['impact_categories_eco']
-            self.C = pd.DataFrame(self.C_f.todense(), self.impact_categories_eco,
-                                  list(self.STR['MATRIXID'])).merge(
-                pd.DataFrame(self.C_io.todense(), self.impact_categories_IO, self.flows_of_IO),
-                left_on=pd.DataFrame(self.C_f.todense(), self.impact_categories_eco,
-                                     list(self.STR['MATRIXID'])).index,
-                right_on=pd.DataFrame(self.C_io.todense(), self.impact_categories_IO,
-                                      self.flows_of_IO).index,
-                how='outer')
-            self.C_index = self.C['key_0'].tolist()
-            self.C.drop(['key_0'], axis=1, inplace=True)
-            self.C = self.C.fillna(0)
-            self.C = back_to_sparse(self.C)
+            if 'Regionalized flows/impacts available' not in self.description:
+                self.C = pd.DataFrame(self.C_f.todense(), self.impact_categories_eco,
+                                      list(self.STR['MATRIXID'])).merge(
+                    pd.DataFrame(self.C_io.todense(), self.impact_categories_IO, self.flows_of_IO),
+                    left_on=pd.DataFrame(self.C_f.todense(), self.impact_categories_eco,
+                                         list(self.STR['MATRIXID'])).index,
+                    right_on=pd.DataFrame(self.C_io.todense(), self.impact_categories_IO,
+                                          self.flows_of_IO).index,
+                    how='outer')
+                self.C_index = self.C['key_0'].tolist()
+                self.C.drop(['key_0'], axis=1, inplace=True)
+                self.C = self.C.fillna(0)
+                self.C = back_to_sparse(self.C)
+            else:
+                self.C_io_regio = self.hybrid_system['C_io_regio']
+                self.C_f_regio = self.hybrid_system['C_f_regio']
+                self.F_io_regio = self.hybrid_system['F_io_regio']
+                self.F_f_regio = self.hybrid_system['F_f_regio']
+                self.regionalized_impact_names_exio = self.hybrid_system['regionalized_impact_names_exio']
+                self.regionalized_impact_names_eco = self.hybrid_system['regionalized_impact_names_eco']
+                self.regionalized_flow_names_exio = self.hybrid_system['regionalized_flow_names_exio']
+                self.regionalized_flow_names_eco = self.hybrid_system['regionalized_flow_names_eco']
+
+                self.C = pd.concat([pd.DataFrame(self.C_f.todense(), self.impact_categories_eco, self.STR['MATRIXID']),
+                                    pd.DataFrame(self.C_io.todense(), self.impact_categories_IO, self.flows_of_IO)],
+                                   sort=False).fillna(0)
+                self.C = self.C.groupby(self.C.index).sum()
+                self.non_regio_impacts_index = self.C.index.tolist()
+                self.C = back_to_sparse(self.C)
+                self.C_regio = pd.concat([pd.DataFrame(self.C_f_regio.todense(), index=self.regionalized_flow_names_eco,
+                                                       columns=self.regionalized_impact_names_eco),
+                                          pd.DataFrame(self.C_io_regio.todense(), index=self.regionalized_flow_names_exio,
+                                                       columns=self.regionalized_impact_names_exio)],
+                                         sort=False).fillna(0).T
+                self.C_regio = self.C_regio.groupby(self.C_regio.index).sum()
+                self.regio_impacts_index = self.C_regio.index.tolist()
+                self.C_regio = back_to_sparse(self.C_regio)
 
         del self.hybrid_system
 
         self.D = pd.DataFrame()
-        self.Xp = pd.DataFrame()
+        self.Lp = pd.DataFrame()
+        self.Lio = pd.DataFrame()
+        self.original = pd.DataFrame()
 
         # self.GWP100_CML2001 = ast.literal_eval(
         #     pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
@@ -1844,31 +1903,91 @@ class Analysis:
 
         """
 
-        if self.capitals:
+        self.Lp = scipy.sparse.csr_matrix(
+            np.linalg.solve(np.eye(self.A_ff.shape[0]) - self.A_ff.todense(), np.eye(self.A_ff.shape[0])))
 
-            self.Xp = scipy.sparse.csr_matrix(
-                np.linalg.solve(np.eye(self.A_ff.shape[0]) - self.A_ff.todense(), np.eye(self.A_ff.shape[0])))
-            Xio = scipy.sparse.csr_matrix(
+        if 'Capitals were endogenized' in self.description:
+            self.Lio = scipy.sparse.csr_matrix(
                 np.linalg.solve(np.eye(self.A_io.shape[0]) - (self.A_io+self.K_io).todense(), np.eye(self.A_io.shape[0])))
-
-            self.D = pd.DataFrame(
-                (self.C.dot(scipy.sparse.vstack(
-                    [self.F_f.dot(self.Xp), self.F_io.dot(Xio).dot(self.A_io_f+self.K_io_f).dot(self.Xp)]))).todense(),
-                index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
+            if 'Regionalized flows/impacts available' in self.description:
+                not_regio = (self.C.dot(scipy.sparse.vstack(
+                    [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f + self.K_io_f).dot(self.Lp)])))
+                regio = (self.C_regio.dot(scipy.sparse.vstack(
+                    [self.F_f_regio.dot(self.Lp),
+                     self.F_io_regio.dot(self.Lio).dot(self.A_io_f+self.K_io_f).dot(self.Lp)])))
+                self.D = pd.DataFrame(scipy.sparse.vstack([not_regio, regio]).todense(),
+                                      index=self.non_regio_impacts_index+self.regio_impacts_index,
+                                      columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
+            else:
+                self.D = pd.DataFrame(
+                    (self.C.dot(scipy.sparse.vstack(
+                        [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(
+                            self.A_io_f+self.K_io_f).dot(self.Lp)]))).todense(),
+                    index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
 
             print('Calculations done! Results are contained in self.D')
 
         else:
-            self.Xp = scipy.sparse.csr_matrix(
-                np.linalg.solve(np.eye(self.A_ff.shape[0]) - self.A_ff.todense(), np.eye(self.A_ff.shape[0])))
-            Xio = scipy.sparse.csr_matrix(
+            self.Lio = scipy.sparse.csr_matrix(
                 np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
+            if 'Regionalized flows/impacts available' in self.description:
+                not_regio = (self.C.dot(scipy.sparse.vstack(
+                    [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)])))
+                regio = (self.C_regio.dot(scipy.sparse.vstack(
+                    [self.F_f_regio.dot(self.Lp),
+                     self.F_io_regio.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)])))
+                self.D = pd.DataFrame(scipy.sparse.vstack([not_regio, regio]).todense(),
+                                      index=self.non_regio_impacts_index+self.regio_impacts_index,
+                                      columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
+            else:
+                self.D = pd.DataFrame(
+                    (self.C.dot(scipy.sparse.vstack(
+                        [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)]))).todense(),
+                    index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
+            print('Calculations done! Results are contained in self.D')
 
-            self.D = pd.DataFrame(
-                (self.C.dot(scipy.sparse.vstack(
-                    [self.F_f.dot(self.Xp), self.F_io.dot(Xio).dot(self.A_io_f).dot(self.Xp)]))).todense(),
-                index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
-            print('Calculations done! Results are contained in self.d')
+    def contributions(self, process):
+
+        if self.Lp.empty:
+            self.Lp = scipy.sparse.csr_matrix(
+                np.linalg.solve(np.eye(self.A_ff.shape[0]) - self.A_ff.todense(), np.eye(self.A_ff.shape[0])))
+        if self.Lio.empty:
+            if 'Capitals were endogenized' in self.description:
+                self.Lio = scipy.sparse.csr_matrix(
+                    np.linalg.solve(np.eye(self.A_io.shape[0]) - (self.A_io + self.K_io).todense(),
+                                    np.eye(self.A_io.shape[0])))
+            else:
+                self.Lio = scipy.sparse.csr_matrix(
+                    np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
+
+        position_process = [i for i, x in enumerate(list(self.PRO_f['activityId'])) if x == process][0]
+
+        Xp = self.Lp.dot(scipy.sparse.csr_matrix(np.diagflat(self.A_ff.todense()[:, position_process])))
+
+        Xiop = self.Lio.dot(self.A_io_f).dot(Xp)
+
+        Xio = self.Lio.dot(scipy.sparse.csr_matrix(np.diagflat(self.A_io_f.todense()[:, position_process])))
+
+        X = scipy.sparse.hstack([scipy.sparse.vstack([Xp, Xiop]), scipy.sparse.vstack(
+            [scipy.sparse.csr_matrix(np.zeros((Xp.shape[0], Xio.shape[0]))), Xio])])
+
+        F = scipy.sparse.hstack([scipy.sparse.vstack(
+            [self.F_f, scipy.sparse.csr_matrix(np.zeros((self.F_io.shape[0], self.A_ff.shape[0])))]),
+                             scipy.sparse.vstack(
+                                 [scipy.sparse.csr_matrix(np.zeros((self.F_f.shape[0], self.A_io.shape[0]))),
+                                  self.F_io])])
+
+        if 'Regionalized flows/impacts available' in self.description:
+            F_regio = scipy.sparse.hstack([scipy.sparse.vstack(
+                [self.F_f_regio, scipy.sparse.csr_matrix(np.zeros((self.F_io_regio.shape[0], self.A_ff.shape[0])))]),
+                scipy.sparse.vstack(
+                    [scipy.sparse.csr_matrix(np.zeros((self.F_f_regio.shape[0], self.A_io.shape[0]))),
+                     self.F_io_regio])])
+
+            return F.dot(X), F_regio.dot(X)
+
+        else:
+            return F.dot(X)
 
     def contribution_analysis(self, type_of_analysis, UUID, impact_category):
         """ Method to execute multiple types of contribution analyses.
@@ -1928,6 +2047,38 @@ class Analysis:
         name_impact_categories = self.check_impact_category(impact_category)
         results = self.get_results(UUID, X, name_impact_categories, type_of_analysis)
         return results
+
+    def get_increase_from_hybridization(self):
+        """Optional method to get the increase for each process of the LCA database, from hybridizing."""
+
+        if 'Regionalized flows/impacts available' in self.description:
+            Cp = self.C.copy().todense()
+            Cp[:, len(self.STR['MATRIXID']):] = 0
+            Cp = back_to_sparse(Cp)
+            Fp = scipy.sparse.vstack(
+                [self.F_f, scipy.sparse.csr_matrix(np.zeros((self.F_io.shape[0], self.F_f.shape[1])))])
+            Cp_regio = self.C_regio.copy().todense()
+            Cp_regio[:, len(self.regionalized_flow_names_eco):] = 0
+            Cp_regio = back_to_sparse(Cp_regio)
+            Fp_regio = scipy.sparse.vstack(
+                [self.F_f_regio, scipy.sparse.csr_matrix(np.zeros((self.F_io_regio.shape[0], self.F_f_regio.shape[1])))])
+            self.original = pd.DataFrame(scipy.sparse.vstack([
+                Cp.dot(Fp).dot(self.Lp),
+                Cp_regio.dot(Fp_regio).dot(self.Lp)]).todense(),
+                                    index=self.non_regio_impacts_index+self.regio_impacts_index,
+                                    columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
+            percent_increase = ((self.D - self.original) / self.original * 100).fillna(0)
+        else:
+            Cp = self.C.copy().todense()
+            Cp[:, len(self.STR['MATRIXID']):] = 0
+            Cp = back_to_sparse(Cp)
+            Fp = scipy.sparse.vstack(
+                [self.F_f, scipy.sparse.csr_matrix(np.zeros((self.F_io.shape[0], self.F_f.shape[1])))])
+
+            self.original = pd.DataFrame((Cp.dot(Fp).dot(self.Lp)).todense(), self.C_index,
+                                    self.PRO_f['activityName']).T.loc[self.list_to_hyb]
+            percent_increase = ((self.D.T - self.original) / self.original * 100).fillna(0)
+        return percent_increase
 
     def check_impact_category(self, impact_category):
         """ Side method identifying the exact index labels of the studied impact categories
@@ -2054,20 +2205,6 @@ class Analysis:
             return self.PRO_f.loc[[i for i in self.PRO_f.index if activity in self.PRO_f.activityName[i]]]
         else:
             print('Enter at least a product or an activity')
-
-    def get_increase_from_hybridization(self):
-        """Optional method to get the increase for each process of the LCA database, from hybridizing."""
-
-        Cp = self.C.copy().todense()
-        Cp[:, len(self.STR['MATRIXID']):] = 0
-        Cp = back_to_sparse(Cp)
-        Fp = scipy.sparse.vstack(
-            [self.F_f, scipy.sparse.csr_matrix(np.zeros((self.F_io.shape[0], self.F_f.shape[1])))])
-
-        original = pd.DataFrame((Cp.dot(Fp).dot(self.Xp)).todense(), self.C_index,
-                                self.PRO_f['activityName']).T.loc[self.list_to_hyb]
-        percent_increase = ((self.D.T - original) / original * 100).fillna(0)
-        return percent_increase
 
 
 def extract_version_from_name(name_database):
