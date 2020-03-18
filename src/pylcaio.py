@@ -339,17 +339,33 @@ class DatabaseLoader:
                     self.description.append('Classic impact categories were used')
                 else:
                     self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/Exiobase_not_regionalized.npz'))
+                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Exiobase_not_regionalized.npz'))
                     self.extended_impact_names_IW_exio = eval(open(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
+                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
                     self.C_f = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/Ecoinvent_not_regionalized.npz'))
+                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Ecoinvent_not_regionalized.npz'))
                     self.extended_impact_names_IW_eco = eval(open(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
+                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
                     self.description.append('Impact World+ was used')
 
             else:
                 self.description.append('Environmental extensions were not completed')
+                if impact_world:
+                    self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Exiobase_not_regionalized.npz'))
+                    self.extended_impact_names_IW_exio = eval(open(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
+                    self.C_f = scipy.sparse.load_npz(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Ecoinvent_not_regionalized.npz'))
+                    self.extended_impact_names_IW_eco = eval(open(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
+                    self.description.append('Impact World+ was used')
+                    self.F_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Exiobase_not_regionalized_F.npz'))
+                    self.extended_flows_names = eval(open(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/normal_flows_names.txt'), 'r').read())
+                else:
+                    self.description.append('Classic impact categories were used')
 
         if regionalized:
             if not impact_world:
@@ -357,19 +373,34 @@ class DatabaseLoader:
                       'Please pass the corresponding argument as True')
             else:
                 self.description.append('Regionalized flows/impacts available')
-                # load regionalized characterization matrices
-                self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
-                    __name__, '/Data/Characterization_matrix_IW+/Exiobase_regionalized.npz'))
-                self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_exiobase.txt'), 'r').read())
-                self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_exiobase_flows.txt'), 'r').read())
-                self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
-                    __name__, '/Data/Characterization_matrix_IW+/Ecoinvent_regionalized.npz'))
-                self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_ecoinvent.txt'), 'r').read())
-                self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
-                        __name__, '/Data/Characterization_matrix_IW+/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
+                if complete_extensions:
+                    # load regionalized characterization matrices
+                    self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Exiobase_regionalized.npz'))
+                    self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_exiobase.txt'), 'r').read())
+                    self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_exiobase_flows.txt'), 'r').read())
+                    self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Ecoinvent_regionalized.npz'))
+                    self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_ecoinvent.txt'), 'r').read())
+                    self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
+                else:
+                    # load regionalized characterization matrices
+                    self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Exiobase_regionalized.npz'))
+                    self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_exiobase.txt'), 'r').read())
+                    self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_exiobase_flows.txt'), 'r').read())
+                    self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Ecoinvent_regionalized.npz'))
+                    self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_ecoinvent.txt'), 'r').read())
+                    self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
+                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
                 # manufacture regionalized environmental extensions matrix (EXIOBASE)
                 F_io = pd.DataFrame(self.F_io.todense(),
                                     self.extended_flows_names,
@@ -579,10 +610,6 @@ class DatabaseLoader:
                 self.listmarket + self.listnottransacted + self.listguillotine + self.dummyprocesses
                 + self.null_price + self.list_uncovered_geographies)
 
-        self.read_template()
-
-        # self.qualitychecks()
-
         return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, F_f=self.F_f, F_io=self.F_io, X_io=self.X_io,
                      y_io=self.y_io, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f, IMP=self.IMP,
                      listcountry=self.listcountry, listregions=self.listregions, K_io=self.K_io,
@@ -607,152 +634,6 @@ class DatabaseLoader:
                      regionalized_impact_names_eco=self.regionalized_impact_names_eco,
                      regionalized_flow_names_exio=self.regionalized_flow_names_exio,
                      regionalized_flow_names_eco=self.regionalized_flow_names_eco,  description=self.description)
-
-    def read_template(self):
-        template_foreground_metadata = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
-                                                                                                            '/Template.xlsx'),
-                                                                              'Metadata_foreground'))
-        template_foreground_exchanges = template_sheet_treatment(pd.read_excel(pkg_resources.resource_stream(__name__,
-                                                                                                             '/Template.xlsx'),
-                                                                               'Unit_processes_exchanges')).ffill()
-
-        if template_foreground_metadata.isna().all().all():
-            return
-        if template_foreground_exchanges.isna().all().all():
-            return
-
-        for new_process_to_hybridize in [i for i in template_foreground_metadata.index
-                                         if template_foreground_metadata.to_hybridize[i] == 'yes']:
-            self.list_to_hyb.append(new_process_to_hybridize)
-        for new_process_not_to_hybridize in [i for i in template_foreground_metadata.index
-                                             if template_foreground_metadata.to_hybridize[i] == 'no']:
-            self.list_not_to_hyb.append(new_process_not_to_hybridize)
-        for new_process_not_to_hybridize in [i for i in template_foreground_metadata.index
-                                             if str(template_foreground_metadata.to_hybridize[i]) == 'nan']:
-            self.list_not_to_hyb.append(new_process_not_to_hybridize)
-        template_foreground_metadata.drop('to_hybridize', axis=1, inplace=True)
-        self.PRO_f = pd.concat([self.PRO_f, template_foreground_metadata], sort=False)
-
-        for process_to_add in template_foreground_metadata.index:
-            self.add_process_to_matrices(process_to_add)
-
-        technosphere_exchanges = template_foreground_exchanges.loc[[i for i in template_foreground_exchanges.index if
-                                                                    template_foreground_exchanges.input_output[
-                                                                        i] in self.PRO_f.index]]
-        pivot1 = pd.pivot_table(technosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
-                                values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum)
-        if not pivot1.empty:
-            del pivot1.index.name
-            del pivot1.columns.name
-            pivot1 = LCA_convention_to_IO(pivot1)
-            self.A_ff.loc[pivot1.index, template_foreground_metadata.index] = pivot1
-
-        biosphere_exchanges = template_foreground_exchanges.loc[[i for i in template_foreground_exchanges.index if
-                                                                 template_foreground_exchanges.input_output[
-                                                                     i] in self.STR_f.index]]
-
-        pivot2 = pd.pivot_table(biosphere_exchanges.loc[:, ['ProcessId', 'input_output', 'value']],
-                                values='value', index=['input_output'], columns=['ProcessId'], aggfunc=sum)
-        if not pivot2.empty:
-            del pivot2.index.name
-            del pivot2.columns.name
-            pivot2 = LCA_convention_to_IO(pivot2)
-            self.F_f.loc[pivot2.index, template_foreground_metadata.index] = pivot2
-
-    def add_process_to_matrices(self, index):
-        """ Creates an empty row and empty column for processes to add """
-        self.A_ff[index] = 0
-        self.A_ff = pd.concat([self.A_ff, pd.DataFrame(0, columns=self.A_ff.columns, index=[index])], sort=False)
-        self.F_f[index] = 0
-        self.F_io_f[index] = 0
-        # self.y_f[index] = 0
-        # self.y_f.loc[index, index] = 1
-
-    def qualitychecks(self):
-        """ Several quality checks to ensure that data entered by the user in the numerous excel and text files
-        does not contain errors """
-        if self.A_ff.empty:
-            raise Exception('A_ff is empty!')
-        if self.A_io.empty:
-            raise Exception('A_io is empty!')
-        if self.F_f.empty:
-            raise Exception('F_f is empty!')
-        if self.F_io.empty:
-            raise Exception('F_io is empty!')
-        if self.C_f.empty:
-            raise Exception('C_f is empty!')
-        if self.C_io.empty:
-            raise Exception('C_io is empty!')
-        if len(self.list_to_hyb) == 0:
-            raise Exception('list_to_hyb is empty!')
-        if len(self.list_not_to_hyb) == 0:
-            raise Exception('list_not_to_hyb is empty!')
-        if len(self.listmarket) == 0:
-            raise Exception('listmarket is empty!')
-        if len(self.listcountry) == 0:
-            raise Exception('listcountry is empty!')
-        if len(self.listregions) == 0:
-            raise Exception('listregions is empty!')
-        if len(self.countries_per_regions) == 0:
-            raise Exception('no concordance between regions and countries entered')
-        if len(self.io_categories) == 0:
-            raise Exception('no concordance between categories and product groups entered')
-        if self.reference_year_IO == 0:
-            raise Exception('no reference year entered')
-        if self.number_of_products_IO == 0:
-            raise Exception('no number of products of IO entered')
-        if self.number_of_countries_IO == 0:
-            raise Exception('no number of countries of IO entered')
-        if len([k for k in self.countries_per_regions.keys() if k not in self.listregions]) != 0:
-            raise Exception('countries_per_regions countains regions that are not in listregions')
-        if len([k for k in self.listregions if k not in self.countries_per_regions.keys()]) != 0:
-            raise Exception('some regions of listregions are not translated into countries in countries_per_regions')
-        for list_of_country in self.countries_per_regions.values():
-            for country in list_of_country:
-                if country not in self.listcountry:
-                    raise Exception('some countries in countries_per_regions are not present in listcountry')
-        if len([cat for cat in self.categories_same_functionality if cat not in self.io_categories.keys()]) != 0:
-            raise Exception('All categories of same functionality must also be declared in io_categories')
-        groups = []
-        for list_of_groups in self.io_categories.values():
-            for group in list_of_groups:
-                if group in self.A_io.index.levels[1]:
-                    groups.append(group)
-        if len(set(groups)) != len(groups):
-            raise Exception('Each product group can only belong to one category')
-        if pd.DataFrame(self.PRO_f.ProductTypeName[self.list_to_hyb]).isnull().any()[0]:
-            raise Exception('A process to hybridize is not matched to any product group')
-        if len([geo for geo in self.PRO_f.io_geography if (geo not in self.A_io.index.levels[0]
-                                                           and geo not in self.listregions
-                                                           and geo != 'RoW'
-        )]) != 0:
-            raise Exception('A geography supposed to be used to hybridize processes is not included in the IO database')
-        if not len(set(self.PRO_f.index.tolist())) == len(self.PRO_f.index.tolist()):
-            raise Exception('Duplicate in the indexes of PRO_f')
-        if self.A_ff.isnull().any().any():
-            raise Exception('NaN values in A_ff')
-        # if not self.A_ff[self.A_ff < 0].isna().all().all():
-        #     raise Exception('Negative values in A_ff')
-        if not (self.A_ff.index == self.PRO_f.index).all():
-            raise Exception('A_ff and PRO_f do not have the same index')
-        if not (self.A_ff.index == self.A_ff.columns).all():
-            raise Exception('A_ff indexes and columns are not identical')
-        if not len(self.list_to_hyb) + len(self.list_not_to_hyb) == len(self.PRO_f):
-            raise Exception('Some processes are neither in list_to_hyb nor list_not_to_hyb')
-        if not (self.F_f.index.tolist().sort() == self.C_f.columns.tolist().sort()):
-            raise Exception('Rows of F_f must match with columns of C_f')
-        if self.io_database_name_and_version == 'exiobase3':
-            if not (self.F_io.index.tolist().sort() == self.C_io.columns.tolist().sort()):
-                raise Exception('Rows of F_io must match with columns of C_io')
-        elif self.io_database_name_and_version == 'exiobase2':
-            if not (self.F_io.index.tolist() == self.C_io.columns.tolist()):
-                raise Exception('Rows of F_io must match with columns of C_io')
-        if not (self.A_ff.index.tolist().sort() == self.F_f.columns.tolist().sort()):
-            raise Exception('Rows of A_ff must match with columns of F_f')
-        if not (self.A_io.index.tolist().sort() == self.F_io.columns.tolist().sort()):
-            raise Exception('Rows of A_io must match with columns of F_io')
-        if not (self.PRO_f.activityId + '_' + self.PRO_f.productId == self.PRO_f.index).all():
-            raise Exception('Indexes must be a combination of activityId and productId, in this order')
 
 
 class LCAIO:
@@ -907,7 +788,11 @@ class LCAIO:
             raise Exception('Please enter a method to correct double counting (i.e. binary or STAM)')
 
         if not capitals:
+            self.capitals = False
             self.description.append('Capitals were not endogenized')
+        if capitals:
+            self.description.append('Capitals were endogenized')
+            self.capitals = True
 
         self.identify_rows()
         self.update_prices_electricity()
@@ -1008,9 +893,34 @@ class LCAIO:
                                                    names=['region', 'sector'])).dot(
             H_for_hyb * inflation * Geo) * self.PRO_f.price
 
+        if capitals:
+            self.K_io_f_uncorrected = pd.DataFrame(self.K_io.todense(), index=pd.MultiIndex.from_product(
+                                                   [self.regions_of_IO, self.sectors_of_IO],
+                                                   names=['region', 'sector']), columns=pd.MultiIndex.from_product(
+                                                   [self.regions_of_IO, self.sectors_of_IO],
+                                                   names=['region', 'sector'])).dot(
+                H_for_hyb * inflation * Geo) * self.PRO_f.price
+
+            # Since we endogenized capitals we need to remove them from both final demand and factors of production
+            self.y_io = pd.DataFrame(self.y_io.todense(),
+                                     pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]),
+                                     pd.MultiIndex.from_product([self.regions_of_IO, self.Y_categories]))
+            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
+            self.y_io = back_to_sparse(self.y_io)
+            if len(self.F_io.todense()) == 1104:
+                self.F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO,
+                                         pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
+            else:
+                self.F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names,
+                                         pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
+            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
+            self.F_io = back_to_sparse(self.F_io)
+
         # ---- HYBRIDIZATION WITHOUT PRICES ------
 
-        self.apply_scaling_without_prices()
+        self.apply_scaling_without_prices(self.capitals)
+        del self.aggregated_A_io
+        del self.aggregated_F_io
 
         self.A_io_f_uncorrected += pd.DataFrame(self.A_io.todense(), index=pd.MultiIndex.from_product(
                                                    [self.regions_of_IO, self.sectors_of_IO],
@@ -1021,18 +931,6 @@ class LCAIO:
         self.A_io_f_uncorrected = back_to_sparse(self.A_io_f_uncorrected)
 
         if capitals:
-            self.K_io_f_uncorrected = pd.DataFrame(self.K_io.todense(), index=pd.MultiIndex.from_product(
-                                                   [self.regions_of_IO, self.sectors_of_IO],
-                                                   names=['region', 'sector']), columns=pd.MultiIndex.from_product(
-                                                   [self.regions_of_IO, self.sectors_of_IO],
-                                                   names=['region', 'sector'])).dot(
-                H_for_hyb * inflation * Geo) * self.PRO_f.price
-
-            self.apply_scaling_without_prices()
-
-            del self.aggregated_A_io
-            del self.aggregated_F_io
-
             self.K_io_f_uncorrected = self.K_io_f_uncorrected + pd.DataFrame(self.K_io.todense(),
                                                                              index=pd.MultiIndex.from_product(
                                                    [self.regions_of_IO, self.sectors_of_IO],
@@ -1041,27 +939,6 @@ class LCAIO:
                                                    names=['region', 'sector'])).dot(
                 self.add_on_H_scaled_vector * inflation * Geo)
             self.K_io_f_uncorrected = back_to_sparse(self.K_io_f_uncorrected)
-            self.description.append('Capitals were endogenized')
-            self.capitals = True
-
-            # Since we endogenized capitals we need to remove them from both final demand and factors of production
-            self.y_io = pd.DataFrame(self.y_io.todense(),
-                                     pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]),
-                                     pd.MultiIndex.from_product([self.regions_of_IO, self.Y_categories]))
-            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
-            self.y_io = back_to_sparse(self.y_io)
-            if len(self.F_io.todense()) == 2482:
-                self.F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names,
-                                         pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
-            elif len(self.F_io.todense()) == 1104:
-                self.F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO,
-                                         pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
-            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
-            self.F_io = back_to_sparse(self.F_io)
-
-        elif not capitals:
-            self.capitals = False
-            self.description.append('Capitals were not endogenized')
 
         # ------ DOUBLE COUNTING PART -------
 
@@ -1443,20 +1320,16 @@ class LCAIO:
 
         if str(what_is_treated) + ' waste for treatment: ' + str(treatment) in biogenic_sectors:
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, True)
-            if len(self.F_io.todense()) == 2482:
-                list_CO2_extensions = [i for i in self.extended_flows_names if 'CO2' in i and 'biogenic' in i]
-            elif len(self.F_io.todense()) == 1104:
+            if len(self.F_io.todense()) == 1104:
                 list_CO2_extensions = [i for i in self.flows_of_IO if 'CO2' in i and 'biogenic' in i]
             else:
-                list_CO2_extensions = []
+                list_CO2_extensions = [i for i in self.extended_flows_names if 'CO2' in i and 'biogenic' in i]
         else:
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, False)
-            if len(self.F_io.todense()) == 2482:
-                list_CO2_extensions = [i for i in self.extended_flows_names if 'CO2' in i and 'biogenic' not in i]
-            elif len(self.F_io.todense()) == 1104:
+            if len(self.F_io.todense()) == 1104:
                 list_CO2_extensions = [i for i in self.flows_of_IO if 'CO2' in i and 'biogenic' not in i]
             else:
-                list_CO2_extensions = []
+                list_CO2_extensions = [i for i in self.extended_flows_names if 'CO2' in i and 'biogenic' not in i]
 
         scaling_vector = self.PRO_f.price.copy()
         scaling_vector.loc[:] = 0
@@ -1530,24 +1403,26 @@ class LCAIO:
                        ('Carbon dioxide' in self.STR_f.FULLNAME[i] and 'non-fossil' not in self.STR_f.FULLNAME[i])]
         return pd.DataFrame(self.F_f.loc[keyword, list_of_uuids].sum())
 
-    def apply_scaling_without_prices(self):
+    def apply_scaling_without_prices(self, capitals):
         # The following lines of code are introducing add-ons to enable hybridization bypassing bad price quality
         self.add_on_H_scaled_vector = pd.DataFrame(0, self.H.index, self.H.columns)
 
-        # keep A+K cause we are looking at all the concrete (so renovation + construction)
-        self.aggregated_A_io = (
-                    pd.DataFrame(self.A_io.todense(), self.H.index, self.H.index) + pd.DataFrame(self.K_io.todense(),
-                                                                                                 self.H.index,
-                                                                                                 self.H.index)).groupby(
-            'sector', axis=1).sum()
+        if capitals:
+            # keep A+K cause we are looking at all the concrete (so renovation + construction)
+            self.aggregated_A_io = (
+                    pd.DataFrame(self.A_io.todense(), self.H.index, self.H.index) +
+                    pd.DataFrame(self.K_io.todense(), self.H.index, self.H.index)).groupby('sector', axis=1).sum()
+        else:
+            self.aggregated_A_io = pd.DataFrame(
+                self.A_io.todense(), self.H.index, self.H.index).groupby('sector', axis=1).sum()
         self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
         # identify if environmental flows got extended or not in database_loader()
-        if len(self.F_io.todense()) == 2482:
+        if len(self.F_io.todense()) == 1104:
+            self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO, self.H.index).groupby(
+                level=1, axis=1).sum()
+        else:
             self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names, self.H.index).groupby(
                 level=1, axis=1).sum()
-        elif len(self.F_io.todense()) == 1104:
-            self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO, self.H.index).groupby(level=1,
-                                                                                                             axis=1).sum()
 
         self.A_ff = pd.DataFrame(self.A_ff.todense(), self.PRO_f.index, self.PRO_f.index)
         self.F_f = pd.DataFrame(self.F_f.todense(), self.STR_f.index, self.PRO_f.index)
@@ -1628,44 +1503,82 @@ class LCAIO:
 
         """
 
-        if ('Environmental extensions were completed' in self.description and
-                'Impact World+ was used' in self.description and
-                'Regionalized flows/impacts available' not in self.description):
-            hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
-                             'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                             'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
-                             'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
-                             'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
-                             'impact_categories_IO': self.extended_impact_names_IW_exio,
-                             'impact_categories_eco': self.extended_impact_names_IW_eco}
-        elif ('Environmental extensions were completed' in self.description and
-                'Impact World+ was used' not in self.description):
-            hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
-                             'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                             'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
-                             'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
-                             'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
-                             'IMP': self.IMP.to_dict(), 'impact_categories_IO': self.extended_impact_names_CML}
-        elif 'Regionalized flows/impacts available' in self.description:
-            hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
-                             'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                             'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
-                             'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
-                             'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
-                             'impact_categories_IO': self.extended_impact_names_IW_exio,
-                             'impact_categories_eco': self.extended_impact_names_IW_eco, 'F_f_regio': self.F_f_regio,
-                             'C_io_regio': self.C_io_regio, 'F_io_regio': self.F_io_regio, 'C_f_regio': self.C_f_regio,
-                             'regionalized_flow_names_eco': self.regionalized_flow_names_eco,
-                             'regionalized_flow_names_exio': self.regionalized_flow_names_exio,
-                             'regionalized_impact_names_eco': self.regionalized_impact_names_eco,
-                             'regionalized_impact_names_exio': self.regionalized_impact_names_exio}
+        if 'Capitals were endogenized' in self.description:
+            if ('Impact World+ was used' in self.description and
+                    'Regionalized flows/impacts available' not in self.description):
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                                 'impact_categories_IO': self.extended_impact_names_IW_exio,
+                                 'impact_categories_eco': self.extended_impact_names_IW_eco}
+            elif ('Environmental extensions were completed' in self.description and
+                    'Impact World+ was used' not in self.description):
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                                 'IMP': self.IMP.to_dict(), 'impact_categories_IO': self.extended_impact_names_CML}
+            elif 'Regionalized flows/impacts available' in self.description:
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                                 'impact_categories_IO': self.extended_impact_names_IW_exio,
+                                 'impact_categories_eco': self.extended_impact_names_IW_eco, 'F_f_regio': self.F_f_regio,
+                                 'C_io_regio': self.C_io_regio, 'F_io_regio': self.F_io_regio, 'C_f_regio': self.C_f_regio,
+                                 'regionalized_flow_names_eco': self.regionalized_flow_names_eco,
+                                 'regionalized_flow_names_exio': self.regionalized_flow_names_exio,
+                                 'regionalized_impact_names_eco': self.regionalized_impact_names_eco,
+                                 'regionalized_impact_names_exio': self.regionalized_impact_names_exio}
+            else:
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.flows_of_IO, 'impact_categories_IO': self.impact_methods_IO,
+                                 'IMP': self.IMP.to_dict(), 'STR': self.STR_f.to_dict()}
         else:
-            hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
-                             'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                             'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
-                             'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
-                             'flows_of_IO': self.flows_of_IO, 'impact_categories_IO': self.impact_methods_IO,
-                             'IMP': self.IMP.to_dict(), 'STR': self.STR_f.to_dict()}
+            if ('Impact World+ was used' in self.description and
+                    'Regionalized flows/impacts available' not in self.description):
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
+                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                                 'impact_categories_IO': self.extended_impact_names_IW_exio,
+                                 'impact_categories_eco': self.extended_impact_names_IW_eco}
+            elif ('Environmental extensions were completed' in self.description and
+                    'Impact World+ was used' not in self.description):
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
+                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                                 'IMP': self.IMP.to_dict(), 'impact_categories_IO': self.extended_impact_names_CML}
+            elif 'Regionalized flows/impacts available' in self.description:
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
+                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
+                                 'impact_categories_IO': self.extended_impact_names_IW_exio,
+                                 'impact_categories_eco': self.extended_impact_names_IW_eco, 'F_f_regio': self.F_f_regio,
+                                 'C_io_regio': self.C_io_regio, 'F_io_regio': self.F_io_regio, 'C_f_regio': self.C_f_regio,
+                                 'regionalized_flow_names_eco': self.regionalized_flow_names_eco,
+                                 'regionalized_flow_names_exio': self.regionalized_flow_names_exio,
+                                 'regionalized_impact_names_eco': self.regionalized_impact_names_eco,
+                                 'regionalized_impact_names_exio': self.regionalized_impact_names_exio}
+            else:
+                hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
+                                 'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
+                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
+                                 'flows_of_IO': self.flows_of_IO, 'impact_categories_IO': self.impact_methods_IO,
+                                 'IMP': self.IMP.to_dict(), 'STR': self.STR_f.to_dict()}
 
         if not os.path.exists(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version)):
@@ -1827,8 +1740,6 @@ class Analysis:
         self.F_io = self.hybrid_system['F_io']
         self.C_f = self.hybrid_system['C_f']
         self.C_io = self.hybrid_system['C_io']
-        self.K_io = self.hybrid_system['K_io']
-        self.K_io_f = self.hybrid_system['K_io_f']
         self.STR = self.hybrid_system['STR']
         self.list_to_hyb = self.hybrid_system['list_to_hyb']
         self.description = self.hybrid_system['description']
@@ -1836,6 +1747,11 @@ class Analysis:
         self.regions_of_IO = self.hybrid_system['regions_of_IO']
         self.sectors_of_IO = self.hybrid_system['sectors_of_IO']
         self.impact_categories_IO = self.hybrid_system['impact_categories_IO']
+        try:
+            self.K_io = self.hybrid_system['K_io']
+            self.K_io_f = self.hybrid_system['K_io_f']
+        except KeyError:
+            pass
         if 'Impact World+ was used' not in self.description:
             self.IMP = self.hybrid_system['IMP']
         else:
@@ -1884,15 +1800,18 @@ class Analysis:
         self.Lp = pd.DataFrame()
         self.Lio = pd.DataFrame()
         self.original = pd.DataFrame()
+        self.total_emissions_not_regio = pd.DataFrame()
+        self.total_emissions_regio = pd.DataFrame()
+        self.total_emissions = pd.DataFrame()
 
-        # self.GWP100_CML2001 = ast.literal_eval(
-        #     pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
-        # self.Acidification_CML2001 = ast.literal_eval(
-        #     pkg_resources.resource_string(__name__, '/Data/Characterization_matching/Acid.txt').decode('utf-8'))
-        # self.Eutrophication_CML2001 = ast.literal_eval(
-        #     pkg_resources.resource_string(__name__, '/Data/Characterization_matching/Eutro.txt').decode('utf-8'))
-        # self.HTox_CML2001 = ast.literal_eval(
-        #     pkg_resources.resource_string(__name__, '/Data/Characterization_matching/HTox.txt').decode('utf-8'))
+        self.GWP100_CML2001 = ast.literal_eval(
+            pkg_resources.resource_string(__name__, '/Data/Characterization_matching/GWP.txt').decode('utf-8'))
+        self.Acidification_CML2001 = ast.literal_eval(
+            pkg_resources.resource_string(__name__, '/Data/Characterization_matching/Acid.txt').decode('utf-8'))
+        self.Eutrophication_CML2001 = ast.literal_eval(
+            pkg_resources.resource_string(__name__, '/Data/Characterization_matching/Eutro.txt').decode('utf-8'))
+        self.HTox_CML2001 = ast.literal_eval(
+            pkg_resources.resource_string(__name__, '/Data/Characterization_matching/HTox.txt').decode('utf-8'))
 
     def calc_lifecycle(self):
         """ Simply calculates lifecycle production, emissions, or impacts
@@ -1910,19 +1829,20 @@ class Analysis:
             self.Lio = scipy.sparse.csr_matrix(
                 np.linalg.solve(np.eye(self.A_io.shape[0]) - (self.A_io+self.K_io).todense(), np.eye(self.A_io.shape[0])))
             if 'Regionalized flows/impacts available' in self.description:
-                not_regio = (self.C.dot(scipy.sparse.vstack(
-                    [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f + self.K_io_f).dot(self.Lp)])))
-                regio = (self.C_regio.dot(scipy.sparse.vstack(
-                    [self.F_f_regio.dot(self.Lp),
-                     self.F_io_regio.dot(self.Lio).dot(self.A_io_f+self.K_io_f).dot(self.Lp)])))
-                self.D = pd.DataFrame(scipy.sparse.vstack([not_regio, regio]).todense(),
+                self.total_emissions_not_regio = scipy.sparse.vstack(
+                    [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f + self.K_io_f).dot(self.Lp)])
+                self.total_emissions_regio = scipy.sparse.vstack([self.F_f_regio.dot(self.Lp),
+                                                                  self.F_io_regio.dot(self.Lio).dot(
+                                                                      self.A_io_f+self.K_io_f).dot(self.Lp)])
+                self.D = pd.DataFrame(scipy.sparse.vstack([self.C.dot(self.total_emissions_not_regio),
+                                                           self.C_regio.dot(self.total_emissions_regio)]).todense(),
                                       index=self.non_regio_impacts_index+self.regio_impacts_index,
                                       columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
             else:
+                self.total_emissions = scipy.sparse.vstack([self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(
+                    self.A_io_f+self.K_io_f).dot(self.Lp)])
                 self.D = pd.DataFrame(
-                    (self.C.dot(scipy.sparse.vstack(
-                        [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(
-                            self.A_io_f+self.K_io_f).dot(self.Lp)]))).todense(),
+                    (self.C.dot(self.total_emissions)).todense(),
                     index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
 
             print('Calculations done! Results are contained in self.D')
@@ -1931,34 +1851,39 @@ class Analysis:
             self.Lio = scipy.sparse.csr_matrix(
                 np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
             if 'Regionalized flows/impacts available' in self.description:
-                not_regio = (self.C.dot(scipy.sparse.vstack(
-                    [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)])))
-                regio = (self.C_regio.dot(scipy.sparse.vstack(
-                    [self.F_f_regio.dot(self.Lp),
-                     self.F_io_regio.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)])))
-                self.D = pd.DataFrame(scipy.sparse.vstack([not_regio, regio]).todense(),
+                self.total_emissions_not_regio = scipy.sparse.vstack(
+                    [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)])
+                self.total_emissions_regio = scipy.sparse.vstack([self.F_f_regio.dot(self.Lp),
+                                                                  self.F_io_regio.dot(self.Lio).dot(
+                                                                      self.A_io_f).dot(self.Lp)])
+                self.D = pd.DataFrame(scipy.sparse.vstack([self.C.dot(self.total_emissions_not_regio),
+                                                           self.C_regio.dot(self.total_emissions_regio)]).todense(),
                                       index=self.non_regio_impacts_index+self.regio_impacts_index,
                                       columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
             else:
+                self.total_emissions = scipy.sparse.vstack([self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(
+                    self.A_io_f).dot(self.Lp)])
                 self.D = pd.DataFrame(
-                    (self.C.dot(scipy.sparse.vstack(
-                        [self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(self.A_io_f).dot(self.Lp)]))).todense(),
+                    (self.C.dot(self.total_emissions)).todense(),
                     index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
             print('Calculations done! Results are contained in self.D')
 
     def contributions(self, process):
 
-        if self.Lp.empty:
-            self.Lp = scipy.sparse.csr_matrix(
-                np.linalg.solve(np.eye(self.A_ff.shape[0]) - self.A_ff.todense(), np.eye(self.A_ff.shape[0])))
-        if self.Lio.empty:
-            if 'Capitals were endogenized' in self.description:
-                self.Lio = scipy.sparse.csr_matrix(
-                    np.linalg.solve(np.eye(self.A_io.shape[0]) - (self.A_io + self.K_io).todense(),
-                                    np.eye(self.A_io.shape[0])))
-            else:
-                self.Lio = scipy.sparse.csr_matrix(
-                    np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
+        try:
+            if self.Lp.empty:
+                self.Lp = scipy.sparse.csr_matrix(
+                    np.linalg.solve(np.eye(self.A_ff.shape[0]) - self.A_ff.todense(), np.eye(self.A_ff.shape[0])))
+            if self.Lio.empty:
+                if 'Capitals were endogenized' in self.description:
+                    self.Lio = scipy.sparse.csr_matrix(
+                        np.linalg.solve(np.eye(self.A_io.shape[0]) - (self.A_io + self.K_io).todense(),
+                                        np.eye(self.A_io.shape[0])))
+                else:
+                    self.Lio = scipy.sparse.csr_matrix(
+                        np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
+        except AttributeError:
+            pass
 
         position_process = [i for i, x in enumerate(list(self.PRO_f['activityId'])) if x == process][0]
 
@@ -1977,6 +1902,9 @@ class Analysis:
                                  [scipy.sparse.csr_matrix(np.zeros((self.F_f.shape[0], self.A_io.shape[0]))),
                                   self.F_io])])
 
+        full_index = list(self.PRO_f['activityId'])+pd.MultiIndex.from_product([
+            self.regions_of_IO, self.sectors_of_IO]).tolist()
+
         if 'Regionalized flows/impacts available' in self.description:
             F_regio = scipy.sparse.hstack([scipy.sparse.vstack(
                 [self.F_f_regio, scipy.sparse.csr_matrix(np.zeros((self.F_io_regio.shape[0], self.A_ff.shape[0])))]),
@@ -1984,195 +1912,11 @@ class Analysis:
                     [scipy.sparse.csr_matrix(np.zeros((self.F_f_regio.shape[0], self.A_io.shape[0]))),
                      self.F_io_regio])])
 
-            return F.dot(X), F_regio.dot(X)
+            return X, F, F_regio
 
         else:
-            return F.dot(X)
-
-    def contribution_analysis(self, type_of_analysis, UUID, impact_category):
-        """ Method to execute multiple types of contribution analyses.
-
-        Args:
-        -----
-                    type_of_analysis: the type of contribution analysis desired. Can be 'total','LCA' or 'complement'.
-                                      'total' includes LCA inputs and IO complements in the contribution analysis
-                                      'LCA' only includes LCA inputs in the contribution analysis
-                                      'complement' only includes the IO complement in the contribution analysis
-                                UUID: the UUID of the process to analyze
-                    impact_category : the impact category on to which the analysis is performed
-
-        Returns:
-        -------
-            A dataframe ranking processes in contribution descending order
-
-        """
-
-        if type_of_analysis == 'total':
-            if self.capitals:
-                X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
-                    [np.concatenate(
-                        [self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
-                        axis=1),
-                        np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                    axis=0).astype(dtype='float32'),
-                                    np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                            self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]],
-                                                           axis=0))
-                                    )
-            else:
-                X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
-                    [np.concatenate(
-                        [self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                        np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                    axis=0).astype(dtype='float32'),
-                                    np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                            self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]],
-                                                           axis=0))
-                                    )
-
-        elif type_of_analysis == 'LCA':
-            X = np.linalg.solve(np.eye(len(self.A_ff)).astype(dtype='float32') - self.A_ff.values,
-                                np.diag(self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)]))
-
-        elif type_of_analysis == 'complement':
-            Y = pd.DataFrame(0.0, self.A_io_f.index, self.A_io.columns)
-            for i in range(0, len(Y)):
-                Y.iloc[i, i] = self.A_io_f.iloc[i, self.A_io_f.columns.get_loc(UUID)]
-            X = np.linalg.solve(np.eye(len(self.A_io)) - self.A_io.values, Y.values)
-
-        else:
-            print('Enter the type_of_analysis desired: "total", "LCA" or "complement"')
-            return
-
-        name_impact_categories = self.check_impact_category(impact_category)
-        results = self.get_results(UUID, X, name_impact_categories, type_of_analysis)
-        return results
-
-    def get_increase_from_hybridization(self):
-        """Optional method to get the increase for each process of the LCA database, from hybridizing."""
-
-        if 'Regionalized flows/impacts available' in self.description:
-            Cp = self.C.copy().todense()
-            Cp[:, len(self.STR['MATRIXID']):] = 0
-            Cp = back_to_sparse(Cp)
-            Fp = scipy.sparse.vstack(
-                [self.F_f, scipy.sparse.csr_matrix(np.zeros((self.F_io.shape[0], self.F_f.shape[1])))])
-            Cp_regio = self.C_regio.copy().todense()
-            Cp_regio[:, len(self.regionalized_flow_names_eco):] = 0
-            Cp_regio = back_to_sparse(Cp_regio)
-            Fp_regio = scipy.sparse.vstack(
-                [self.F_f_regio, scipy.sparse.csr_matrix(np.zeros((self.F_io_regio.shape[0], self.F_f_regio.shape[1])))])
-            self.original = pd.DataFrame(scipy.sparse.vstack([
-                Cp.dot(Fp).dot(self.Lp),
-                Cp_regio.dot(Fp_regio).dot(self.Lp)]).todense(),
-                                    index=self.non_regio_impacts_index+self.regio_impacts_index,
-                                    columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
-            percent_increase = ((self.D - self.original) / self.original * 100).fillna(0)
-        else:
-            Cp = self.C.copy().todense()
-            Cp[:, len(self.STR['MATRIXID']):] = 0
-            Cp = back_to_sparse(Cp)
-            Fp = scipy.sparse.vstack(
-                [self.F_f, scipy.sparse.csr_matrix(np.zeros((self.F_io.shape[0], self.F_f.shape[1])))])
-
-            self.original = pd.DataFrame((Cp.dot(Fp).dot(self.Lp)).todense(), self.C_index,
-                                    self.PRO_f['activityName']).T.loc[self.list_to_hyb]
-            percent_increase = ((self.D.T - self.original) / self.original * 100).fillna(0)
-        return percent_increase
-
-    def check_impact_category(self, impact_category):
-        """ Side method identifying the exact index labels of the studied impact categories
-
-        Args:
-        -----
-            impact_category : the name of the impact category
-
-        Returns:
-        --------
-            A two-elements list of the two labels of impact categories to study
-
-        """
-        if not impact_category:
-            print('Please enter an impact category: GWP100, Acidification, Eutrophication or HTox')
-            return
-
-        if impact_category == 'GWP100':
-            generic_impact_category_name = self.GWP100_CML2001
-        if impact_category == 'Acidification':
-            generic_impact_category_name = self.Acidification_CML2001
-        if impact_category == 'Eutrophication':
-            generic_impact_category_name = self.Eutrophication_CML2001
-        if impact_category == 'Human toxicity' or impact_category == 'HTox':
-            generic_impact_category_name = self.HTox_CML2001
-
-        for i in range(0, len(self.C_f)):
-            try:
-                if self.C_f.index[i] in generic_impact_category_name:
-                    name_category_LCA = self.C_f.index[i]
-            except NameError:
-                print('For impact categories, enter GWP100, Acidification, Eutrophication or HTox')
-        for i in range(0, len(self.C_io)):
-            try:
-                if [self.C_io.index[i]] in generic_impact_category_name:
-                    name_category_IO = [self.C_io.index[i]]
-            except NameError:
-                print('For impact categories, enter GWP100, Acidification, Eutrophication or HTox')
-        list_to_return = [name_category_LCA, name_category_IO]
-        return list_to_return
-
-    def get_results(self, uuid, x, name_categories, type_of_analysis):
-        """ Side method to get the emissions of a given production
-
-        Args:
-        -----
-                        UUID: the UUID of the process
-                        X   : the matrix of total output calculated in the contribution_analysis method
-            name_categories : the list of name categories extracted in check_impact_category()
-
-        Returns:
-        --------
-            The ranked dataframe of impacts contribution
-
-        """
-
-        if type_of_analysis == 'total':
-            matrix = self.F.copy()
-            matrix[:, self.PRO_f.index.get_loc(uuid) + 1:] = 0
-            matrix[:, :self.PRO_f.index.get_loc(uuid)] = 0
-            d = self.C.values.dot(self.F.dot(x) + matrix)
-            D = pd.DataFrame(d, index=self.C.index, columns=self.index_A)
-            df = pd.DataFrame(D.loc[name_categories[0], :]).join(D.loc[name_categories[1], :].transpose())
-            df['total'] = pd.DataFrame(
-                df.iloc[:, df.columns.get_loc(name_categories[0])] + df.iloc[:,
-                                                                     df.columns.get_loc(name_categories[1][0])])
-            listproduct = [x for x in self.PRO_f.productName] + [float('nan')] * len(self.A_io)
-            listactivity = [x for x in self.PRO_f.activityName] + [float('nan')] * len(self.A_io)
-            df = df.join(pd.DataFrame(listproduct, index=df.index, columns=['productName']))
-            df = df.join(pd.DataFrame(listactivity, index=df.index, columns=['activityName']))
-            df = df.sort_values(by='total', ascending=False)
-            return df
-
-        elif type_of_analysis == 'LCA':
-            matrix = self.F_f.copy().values
-            matrix[:, self.PRO_f.index.get_loc(uuid) + 1:] = 0
-            matrix[:, :self.PRO_f.index.get_loc(uuid)] = 0
-            d = self.C_f.fillna(0).values.dot(self.F_f.values.dot(x) + matrix)
-            D = pd.DataFrame(d, index=self.C_f.index, columns=self.A_ff.index)
-            df = pd.DataFrame(D.loc[name_categories[0], :])
-            listproduct = [x for x in self.PRO_f.productName]
-            listactivity = [x for x in self.PRO_f.activityName]
-            df = df.join(pd.DataFrame(listproduct, index=df.index, columns=['productName']))
-            df = df.join(pd.DataFrame(listactivity, index=df.index, columns=['activityName']))
-            df = df.reindex(['productName', 'activityName', name_categories[0]], axis=1)
-            df = df.sort_values(by=name_categories[0], ascending=False)
-            return df
-
-        elif type_of_analysis == 'complement':
-            d = self.C_io.values.dot(self.F_io.values.dot(x))
-            D = pd.DataFrame(d, index=self.C_io.index, columns=self.A_io.index)
-            df = pd.DataFrame(D.loc[name_categories[1], :]).transpose()
-            df = df.sort_values(by=name_categories[1], ascending=False)
-            return df
+            return (pd.DataFrame(X.todense(), index=full_index, columns=full_index),
+                    pd.DataFrame(F.todense(), index=list(self.STR['MATRIXID'])+self.flows_of_IO, columns=full_index))
 
     def get_available_impact_methods(self, impact_category):
 
