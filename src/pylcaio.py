@@ -2014,13 +2014,6 @@ def sum_elements_list(liste):
     return concatenated_list
 
 
-def template_sheet_treatment(dataframe):
-    """ Removes empty rows and potential typos created Unnamed columns in the template """
-    dataframe = dataframe.dropna(how='all', axis=0)
-    dataframe = dataframe.drop([j for j in [i for i in dataframe.columns] if 'Unnamed' in j], axis=1)
-    return dataframe
-
-
 def LCA_convention_to_IO(dataframe):
     """ Changes the convetion of an LCA technology matrix from LCA to IO """
     # no ones on the diagonal
