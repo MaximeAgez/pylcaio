@@ -1794,9 +1794,14 @@ class Analysis:
 
         Xp = self.Lp.dot(scipy.sparse.csr_matrix(np.diagflat(self.A_ff.todense()[:, position_process])))
 
-        Xiop = self.Lio.dot(self.A_io_f).dot(Xp)
+        if 'Capitals were endogenized' in self.description:
+            Xiop = self.Lio.dot(self.A_io_f+self.K_io_f).dot(Xp)
 
-        Xio = self.Lio.dot(scipy.sparse.csr_matrix(np.diagflat(self.A_io_f.todense()[:, position_process])))
+            Xio = self.Lio.dot(scipy.sparse.csr_matrix(np.diagflat((self.A_io_f+self.K_io_f).todense()[:, position_process])))
+        else:
+            Xiop = self.Lio.dot(self.A_io_f).dot(Xp)
+
+            Xio = self.Lio.dot(scipy.sparse.csr_matrix(np.diagflat(self.A_io_f.todense()[:, position_process])))
 
         X = scipy.sparse.hstack([scipy.sparse.vstack([Xp, Xiop]), scipy.sparse.vstack(
             [scipy.sparse.csr_matrix(np.zeros((Xp.shape[0], Xio.shape[0]))), Xio])])
@@ -1817,11 +1822,21 @@ class Analysis:
                     [scipy.sparse.csr_matrix(np.zeros((self.F_f_regio.shape[0], self.A_io.shape[0]))),
                      self.F_io_regio])])
 
-            return X, F, F_regio
+            return (pd.DataFrame(X.todense(), index=full_index, columns=full_index),
+                    pd.DataFrame(F.todense(), index=list(self.STR['MATRIXID'])+self.flows_of_IO, columns=full_index),
+                    pd.DataFrame(self.C.todense(), index=self.non_regio_impacts_index,
+                                 columns=list(self.STR['MATRIXID']) + self.flows_of_IO),
+                    pd.DataFrame(F_regio.todense(),
+                                 index=self.regionalized_flow_names_eco+self.regionalized_flow_names_exio,
+                                 columns=full_index),
+                    pd.DataFrame(self.C_regio.todense(),index=self.regio_impacts_index,
+                                 columns=self.regionalized_flow_names_eco+self.regionalized_flow_names_exio))
 
         else:
             return (pd.DataFrame(X.todense(), index=full_index, columns=full_index),
-                    pd.DataFrame(F.todense(), index=list(self.STR['MATRIXID'])+self.flows_of_IO, columns=full_index))
+                    pd.DataFrame(F.todense(), index=list(self.STR['MATRIXID'])+self.flows_of_IO, columns=full_index),
+                    pd.DataFrame(self.C.todense(), index=self.C_index,
+                                 columns=list(self.STR['MATRIXID'])+self.flows_of_IO))
 
     def get_available_impact_methods(self, impact_category):
 
@@ -1838,20 +1853,22 @@ class Analysis:
 
     def navigate_through_PRO_f(self, product=False, geography=False, activity=False):
 
+        PRO_f = pd.DataFrame.from_dict(self.PRO_f)
+
         if product and geography and activity:
-            return self.PRO_f.loc[[i for i in self.PRO_f.index if product in self.PRO_f.productName[i] and
-                                   geography in self.PRO_f.geography[i] and
-                                   activity in self.PRO_f.activityName[i]]]
+            return PRO_f.loc[[i for i in PRO_f.index if product in PRO_f.productName[i] and
+                                   geography in PRO_f.geography[i] and
+                                   activity in PRO_f.activityName[i]]]
         elif product and geography:
-            return self.PRO_f.loc[[i for i in self.PRO_f.index if product in self.PRO_f.productName[i] and
-                                   geography in self.PRO_f.geography[i]]]
+            return PRO_f.loc[[i for i in PRO_f.index if product in PRO_f.productName[i] and
+                                   geography in PRO_f.geography[i]]]
         elif activity and geography:
-            return self.PRO_f.loc[[i for i in self.PRO_f.index if activity in self.PRO_f.activityName[i] and
-                                   geography in self.PRO_f.geography[i]]]
+            return PRO_f.loc[[i for i in PRO_f.index if activity in PRO_f.activityName[i] and
+                                   geography in PRO_f.geography[i]]]
         elif product:
-            return self.PRO_f.loc[[i for i in self.PRO_f.index if product in self.PRO_f.productName[i]]]
+            return PRO_f.loc[[i for i in PRO_f.index if product in PRO_f.productName[i]]]
         elif activity:
-            return self.PRO_f.loc[[i for i in self.PRO_f.index if activity in self.PRO_f.activityName[i]]]
+            return PRO_f.loc[[i for i in PRO_f.index if activity in PRO_f.activityName[i]]]
         else:
             print('Enter at least a product or an activity')
 
