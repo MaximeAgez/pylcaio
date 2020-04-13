@@ -322,11 +322,26 @@ class DatabaseLoader:
             self.description.append('Exiobase 3 / reference year: '+str(self.reference_year_IO))
 
             if complete_extensions:
-                self.F_io = scipy.sparse.load_npz(pkg_resources.resource_filename(__name__,
+                new_extensions = scipy.sparse.load_npz(pkg_resources.resource_filename(__name__,
                                                                                      '/Data/Completed_extensions_exio3/'
-                                                                                     'F_completed.npz'))
-                self.extended_flows_names = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Completed_extensions_exio3/name_extensions.txt'), 'r').read())
+                                                                                     'S_completed.npz'))
+                new_flows_names = eval(open(pkg_resources.resource_filename(
+                    __name__, '/Data/Completed_extensions_exio3/extension_names.txt'), 'r').read())
+
+                extended_extensions = completing_extensions(pd.DataFrame(self.F_io.todense(),
+                                                                            index=self.flows_of_IO,
+                                                                            columns=pd.MultiIndex.from_product([
+                                                                                  self.regions_of_IO,
+                                                                                  self.sectors_of_IO],
+                                                                                  names=['region', 'sector'])),
+                                                            pd.DataFrame(new_extensions.todense(),
+                                                                            index=new_flows_names,
+                                                                            columns=pd.MultiIndex.from_product([
+                                                                                self.regions_of_IO,
+                                                                                self.sectors_of_IO],
+                                                                                names=['region', 'sector'])))
+                self.extended_flows_names = extended_extensions.index.tolist()
+                self.F_io = back_to_sparse(extended_extensions)
 
                 self.description.append('Environmental extensions were completed')
 
@@ -1948,3 +1963,70 @@ def LCA_convention_to_IO(dataframe):
 def back_to_sparse(dataframe):
     return scipy.sparse.csr_matrix(dataframe)
 
+
+def completing_extensions(OG_extensions, new_extensions):
+    """Function to modify the names of the extensions of the original exiobase to match the ones resulting from the
+    matching with USEEIO. Also concatenates both original and new extensions at the end, resulting in the extended
+    exiensions."""
+    # just remove Energy Carrier Net flows and not defined waste flows
+    OG_extensions.drop([i for i in OG_extensions.index if 'Energy Carrier Net' in i],inplace=True)
+    OG_extensions.drop(['Emissions nec - waste - undef'],inplace=True)
+    # simple sum of all values for old names pollutants, e.g., 'CH4 - non combustion - Cement production - air' => 'CH4 - air'
+    easy_match = ['CH4','N2O','SOx','NH3','HCB','NMVOC','PM10','PM2.5','TSP','Cd','Hg','Pb','Zn','PAH']
+    for pollutant in easy_match:
+        list_old_names = [i for i in OG_extensions.index if pollutant in i]
+        OG_extensions.loc[pollutant+' - air'] = OG_extensions.loc[list_old_names].sum()
+        OG_extensions.drop(list_old_names, inplace=True)
+    # hardcoded stuff
+    OG_extensions.loc['Benzo(a)pyrene - air'] = OG_extensions.loc[['Benzo(a)pyrene - combustion - air','B(a)P - non combustion - Primary aluminium production - air','B(a)P - non combustion - Production of coke oven coke - air','B(a)P - non combustion - Production of gascoke - air']].sum()
+    OG_extensions.drop(['Benzo(a)pyrene - combustion - air','B(a)P - non combustion - Primary aluminium production - air','B(a)P - non combustion - Production of coke oven coke - air','B(a)P - non combustion - Production of gascoke - air'],inplace=True)
+    OG_extensions.loc['Benzo(b)fluoranthene - air'] = OG_extensions.loc[['Benzo(b)fluoranthene - combustion - air','B(b)F - non combustion - Primary aluminium production - air','B(b)F - non combustion - Production of coke oven coke - air','B(b)F - non combustion - Production of gascoke - air']].sum()
+    OG_extensions.drop(['Benzo(b)fluoranthene - combustion - air','B(b)F - non combustion - Primary aluminium production - air','B(b)F - non combustion - Production of coke oven coke - air','B(b)F - non combustion - Production of gascoke - air'],inplace=True)
+    OG_extensions.loc['Benzo(k)fluoranthene - air'] = OG_extensions.loc[['Benzo(k)fluoranthene - combustion - air','B(k)F - non combustion - Primary aluminium production - air','B(k)F - non combustion - Production of coke oven coke - air','B(k)F - non combustion - Production of gascoke - air']].sum()
+    OG_extensions.drop(['Benzo(k)fluoranthene - combustion - air','B(k)F - non combustion - Primary aluminium production - air','B(k)F - non combustion - Production of coke oven coke - air','B(k)F - non combustion - Production of gascoke - air'],inplace=True)
+    OG_extensions.loc['CO2 - biogenic - air'] = OG_extensions.loc['CO2 - waste - biogenic - air']
+    OG_extensions.drop(['CO2 - waste - biogenic - air'],inplace=True)
+    OG_extensions.loc['Pxx - soil'] = OG_extensions.loc[['Pxx - agriculture - soil','P - agriculture - soil']].sum()
+    OG_extensions.drop(['Pxx - agriculture - soil','P - agriculture - soil'],inplace=True)
+    old_CO2_flows = [i for i in OG_extensions.index if 'CO2' in i and 'biogenic' not in i]
+    OG_extensions.loc['CO2 - air'] = OG_extensions.loc[old_CO2_flows].sum()
+    OG_extensions.drop(old_CO2_flows,inplace=True)
+    old_CO_flows = [i for i in OG_extensions.index if 'CO' in i and '2' not in i]
+    OG_extensions.loc['CO - air'] = OG_extensions.loc[old_CO_flows].sum()
+    OG_extensions.drop(old_CO_flows,inplace=True)
+    old_NOx_flows = [i for i in OG_extensions.index if 'NOx' in i or 'NOX' in i]
+    OG_extensions.loc['NOx - air'] = OG_extensions.loc[old_NOx_flows].sum()
+    OG_extensions.drop(old_NOx_flows,inplace=True)
+    old_indeno_flows = [i for i in OG_extensions.index if 'Indeno' in i]
+    OG_extensions.loc['Indeno(1,2,3-cd)pyrene - air'] = OG_extensions.loc[old_indeno_flows].sum()
+    OG_extensions.drop(old_indeno_flows,inplace=True)
+    old_PCB_flows = [i for i in OG_extensions.index if 'PCB' in i]
+    OG_extensions.loc['PCBs - air'] = OG_extensions.loc[old_PCB_flows].sum()
+    OG_extensions.drop(old_PCB_flows,inplace=True)
+    old_PCDD_flows = [i for i in OG_extensions.index if 'PCDD' in i]
+    OG_extensions.loc['PCDD_F - air'] = OG_extensions.loc[old_PCDD_flows].sum()
+    OG_extensions.drop(old_PCDD_flows,inplace=True)
+    old_As_flows = [i for i in OG_extensions.index if 'As -' in i]
+    OG_extensions.loc['As - air'] = OG_extensions.loc[old_As_flows].sum()
+    OG_extensions.drop(old_As_flows,inplace=True)
+    old_Ni_flows = [i for i in OG_extensions.index if 'Ni -' in i]
+    OG_extensions.loc['Ni - air'] = OG_extensions.loc[old_Ni_flows].sum()
+    OG_extensions.drop(old_Ni_flows,inplace=True)
+    old_Cr_flows = [i for i in OG_extensions.index if 'Cr -' in i]
+    OG_extensions.loc['Cr - air'] = OG_extensions.loc[old_Cr_flows].sum()
+    OG_extensions.drop(old_Cr_flows,inplace=True)
+    old_Cu_flows = [i for i in OG_extensions.index if 'Cu -' in i]
+    OG_extensions.loc['Cu - air'] = OG_extensions.loc[old_Cu_flows].sum()
+    OG_extensions.drop(old_Cu_flows,inplace=True)
+    old_Se_flows = [i for i in OG_extensions.index if 'Se -' in i]
+    OG_extensions.loc['Se - air'] = OG_extensions.loc[old_Se_flows].sum()
+    OG_extensions.drop(old_Se_flows,inplace=True)
+    old_N_flows = [i for i in OG_extensions.index if 'N -' in i]
+    OG_extensions.loc['N - water'] = OG_extensions.loc[old_N_flows].sum()
+    OG_extensions.drop(old_N_flows,inplace=True)
+    old_P_flows = [i for i in OG_extensions.index if 'P -' in i and 'water' in i]
+    OG_extensions.loc['P - water'] = OG_extensions.loc[old_P_flows].sum()
+    OG_extensions.drop(old_P_flows,inplace=True)
+    # after all this hardwork, concatenate with extensions
+    extended_extensions = pd.concat([OG_extensions,new_extensions])
+    return extended_extensions
