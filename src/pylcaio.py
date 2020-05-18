@@ -29,9 +29,9 @@ import gzip
 import pickle
 import ast
 import pkg_resources
+from time import time
 
 pd.set_option('mode.chained_assignment', None)
-
 
 # pylint: disable-msg=C0103
 
@@ -124,8 +124,6 @@ class DatabaseLoader:
         self.STR_f = pd.DataFrame()
         self.STR_io = pd.DataFrame()
 
-        self.K_io = pd.DataFrame()
-
         self.io_categories = defaultdict(list)
         self.categories_same_functionality = []
 
@@ -166,13 +164,11 @@ class DatabaseLoader:
         if self.io_database_name_and_version not in versions_of_exiobase:
             print('The IO database version you entered is not supported currently')
 
-    def combine_ecoinvent_exiobase(self, path_to_io_database='', path_to_capitals=''):
+    def combine_ecoinvent_exiobase(self, path_to_io_database=''):
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args
         ---
             * path_to_io_database   : the path leading to the io database folder (only required if using  exiobase2)
-            * path_to_capitals      : the path leading to the capitals new matrix (only required if wanting to
-                                      endogenize capitals)
         """
 
         version_ecoinvent = extract_version_from_name(self.lca_database_name_and_version)
@@ -283,28 +279,6 @@ class DatabaseLoader:
             self.reference_year_IO = int(self.IO_database.meta.description[-4:])
 
         self.F_io_f = pd.DataFrame(0, self.F_io.index, self.F_f.columns, dtype='float32')
-
-        # CAPITAL GOODS
-        if path_to_capitals == '':
-            print('No path for the capital folder was provided. Capitals will not be endogenized')
-            Kbar = None
-            inv_diag_x = None
-        elif version_exiobase == str(2):
-            print('The endogeneization of capitals is only available with exiobase3')
-            Kbar = None
-            inv_diag_x = None
-        else:
-            K_dict = scipy.io.loadmat(path_to_capitals)
-            Kbar = pd.DataFrame(K_dict['KbarCfc'].toarray())
-            inv_diag_x = pd.DataFrame(np.diag(self.IO_database.x.iloc[:, 0]))
-            for position in inv_diag_x:
-                if inv_diag_x.loc[position, position] != 0:
-                    inv_diag_x.loc[position, position] = 1 / inv_diag_x.loc[position, position]
-
-            self.K_io = Kbar.dot(inv_diag_x)
-            self.K_io.index = self.A_io.index
-            self.K_io.columns = self.A_io.columns
-            self.K_io = self.K_io.astype('float32')
 
         del self.LCA_database
         del self.IO_database
@@ -434,7 +408,7 @@ class DatabaseLoader:
 
         return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, A_io_f=self.A_io_f, F_f=self.F_f, F_io=self.F_io,
                      F_io_f=self.F_io_f, y_io=self.y_io, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f,
-                     STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions, K_io=self.K_io,
+                     STR_io=self.STR_io, listcountry=self.listcountry, listregions=self.listregions,
                      countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
                      number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
                      number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
@@ -648,8 +622,6 @@ class LCAIO:
         self.STR_f = pd.DataFrame()
         self.STR_io = pd.DataFrame()
 
-        self.K_io = pd.DataFrame()
-
         self.io_categories = defaultdict(list)
         self.categories_same_functionality = []
 
@@ -688,19 +660,18 @@ class LCAIO:
         self.A_io_f_uncorrected = pd.DataFrame()
         self.aggregated_A_io = pd.DataFrame()
         self.aggregated_F_io = pd.DataFrame()
-        self.list_of_capital_sectors = ast.literal_eval(pkg_resources.resource_string(
-            __name__, '/Data/List_of_capitals_goods.txt').decode('utf-8'))
+        self.add_on_H_scaled_vector = pd.DataFrame()
 
         self.double_counting = ''
-        self.capitals = ''
         self.description = []
+        self.basic_A_io_f_uncorrected = pd.DataFrame()
 
         allowed_keys = list(self.__dict__.keys())
         self.__dict__.update((key, value) for key, value in kwargs.items() if key in allowed_keys)
 
     # ----------------------------CORE METHOD-------------------------------------
 
-    def hybridize(self, method_double_counting, capitals=False):
+    def hybridize(self, method_double_counting):
         """ Hybridize an LCA database with an IO database
 
         self.A_io_f_uncorrected is calculated following the equation (1) of the paper [insert doi]
@@ -709,8 +680,6 @@ class LCAIO:
         Args:
         -----
             method_double_counting  : method to correct double counting with (='binary' or ='STAM')
-                    capitals_method : parameter [boolean] defining if capitals will be endogenized (or not) in the
-                                      hybridization. False for no endogenization, True for an endogenization
 
         Returns:
         -------
@@ -720,9 +689,6 @@ class LCAIO:
 
         if not method_double_counting:
             raise Exception('Please enter a method to correct double counting (i.e. binary or STAM)')
-
-        if not capitals:
-            self.description.append('Capitals not endogenized')
 
         self.identify_rows()
         self.update_prices_electricity()
@@ -813,167 +779,11 @@ class LCAIO:
         Geo = weighted_concordance_geography.dot(region_covered_per_process)
 
         # product concordance matrix filtered
-        basic_H_for_hyb = self.H.copy()
-        basic_H_for_hyb.loc[:, self.list_not_to_hyb] = 0
+        H_for_hyb = self.H.copy()
+        H_for_hyb.loc[:, self.list_not_to_hyb] = 0
 
-        if capitals:
-
-            # the uncorrected A_io_f matrix is then defined by the following operation
-            basic_A_io_f_uncorrected = (self.A_io + self.K_io).dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
-
-            # The following lines of code are introducing add-ons to enable hybridization bypassing bad price quality
-            self.aggregated_A_io = (self.A_io + self.K_io).groupby('sector', axis=1).sum()
-            self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
-
-            self.aggregated_F_io = self.F_io.groupby(level=1, axis=1).sum()
-
-            buildings_add_on = self.extract_scaling_vector_technosphere(
-                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-                 'Construction work' and i in self.listguillotine], 'concrete',
-                'Cement, lime and plaster', 'Construction work')
-            self.A_io_f_uncorrected = basic_A_io_f_uncorrected + (self.A_io + self.K_io).dot(buildings_add_on[0] *
-                                                                                             inflation * Geo) * \
-                                      buildings_add_on[1]
-            del buildings_add_on
-            del basic_A_io_f_uncorrected
-
-            transport_equipment_add_on = self.extract_scaling_vector_technosphere(
-                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-                 == 'Other transport equipment' and i in self.listguillotine
-                 and 'aircraft' not in self.PRO_f.productName[i]], 'steel',
-                'Basic iron and steel and of ferro-alloys and first '
-                'products thereof', 'Other transport equipment')
-            self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(transport_equipment_add_on[0] * inflation * Geo) * \
-                                       transport_equipment_add_on[1]
-            del transport_equipment_add_on
-
-            air_transport_equipment_add_on = self.extract_scaling_vector_technosphere(
-                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-                 == 'Other transport equipment' and i in self.listguillotine
-                 and 'aircraft' in self.PRO_f.productName[i]], 'aluminium',
-                'Aluminium and aluminium products',
-                'Other transport equipment')
-            self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(
-                air_transport_equipment_add_on[0] * inflation * Geo) * \
-                                       air_transport_equipment_add_on[1]
-            del air_transport_equipment_add_on
-
-            machinery_add_on = self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-                                                            == 'Machinery and equipment n.e.c.' and i in self.listguillotine],
-                                                           'steel',
-                                                           'Basic iron and steel and of ferro-alloys and first products'
-                                                           ' thereof', 'Machinery and equipment n.e.c.')
-            self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(machinery_add_on[0] * inflation * Geo) * \
-                                       machinery_add_on[1]
-            del machinery_add_on
-
-            air_transportation_add_on = self.extract_scaling_vector_technosphere(
-                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-                 == 'Air transport services' and i in self.listguillotine],
-                'kerosene', 'Kerosene Type Jet Fuel', 'Air transport services')
-            self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(air_transportation_add_on[0] * inflation * Geo) * \
-                                       air_transportation_add_on[1]
-            del air_transportation_add_on
-
-            rail_transportation_add_on = self.extract_scaling_vector_technosphere(
-                [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-                 == 'Railway transportation services' and i in self.listguillotine],
-                'energy', 'Energy', 'Railway transportation services')
-            self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(rail_transportation_add_on[0] * inflation * Geo) * \
-                                       rail_transportation_add_on[1]
-            del rail_transportation_add_on
-
-            self.extract_scaling_vector_biosphere('Food', 'incineration', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Paper', 'incineration', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Plastic', 'incineration', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Intert/metal', 'incineration', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Textiles', 'incineration', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Wood', 'incineration', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Oil/hazardous', 'incineration', inflation, Geo)
-
-            self.extract_scaling_vector_biosphere('Food', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Paper', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Plastic', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Inert/metal/hazardous', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Textiles', 'landfill', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Wood', 'landfill', inflation, Geo)
-
-            self.extract_scaling_vector_biosphere('Food', 'waste water treatment', inflation, Geo)
-            self.extract_scaling_vector_biosphere('Other', 'waste water treatment', inflation, Geo)
-
-            self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
-
-            self.description.append('Capitals endogenized')
-            self.capitals = True
-
-        else:
-            # the uncorrected A_io_f matrix is then defined by the following operation
-            basic_A_io_f_uncorrected = self.A_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
-
-            # The following lines of code are introducing add-ons to enable hybridization bypassing bad price quality
-            # self.aggregated_A_io = self.A_io.groupby('sector', axis=1).sum()
-            # self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
-            #
-            # buildings_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
-            #      'Construction work' and i in self.listguillotine], 'concrete',
-            #     'Cement, lime and plaster', 'Construction work')
-            # self.A_io_f_uncorrected = basic_A_io_f_uncorrected + self.A_io.dot(buildings_add_on[0] *
-            #                                                                                inflation * Geo) *\
-            #                           buildings_add_on[1]
-            # del buildings_add_on
-            # del basic_A_io_f_uncorrected
-            #
-            # transport_equipment_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Other transport equipment' and i in self.listguillotine
-            #      and 'aircraft' not in self.PRO_f.productName[i]], 'steel',
-            #     'Basic iron and steel and of ferro-alloys and first '
-            #     'products thereof', 'Other transport equipment')
-            # self.A_io_f_uncorrected += self.A_io.dot(transport_equipment_add_on[0] * inflation * Geo) * \
-            #                            transport_equipment_add_on[1]
-            # del transport_equipment_add_on
-            #
-            # air_transport_equipment_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Other transport equipment' and i in self.listguillotine
-            #      and 'aircraft' in self.PRO_f.productName[i]], 'aluminium',
-            #     'Aluminium and aluminium products',
-            #     'Other transport equipment')
-            # self.A_io_f_uncorrected += self.A_io.dot(air_transport_equipment_add_on[0] * inflation * Geo) * \
-            #                            air_transport_equipment_add_on[1]
-            # del air_transport_equipment_add_on
-            #
-            # machinery_add_on = self.extract_scaling_vector([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #                                                 == 'Machinery and equipment n.e.c.' and i in self.listguillotine],
-            #                                                'steel',
-            #                                                'Basic iron and steel and of ferro-alloys and first products'
-            #                                                ' thereof', 'Machinery and equipment n.e.c.')
-            # self.A_io_f_uncorrected += self.A_io.dot(machinery_add_on[0] * inflation * Geo) * machinery_add_on[1]
-            # del machinery_add_on
-            #
-            # air_transportation_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Air transport services' and i in self.listguillotine],
-            #     'kerosene', 'Kerosene Type Jet Fuel', 'Air transport services')
-            # self.A_io_f_uncorrected += self.A_io.dot(air_transportation_add_on[0] * inflation * Geo) * \
-            #                            air_transportation_add_on[1]
-            # del air_transportation_add_on
-            #
-            # rail_transportation_add_on = self.extract_scaling_vector(
-            #     [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-            #      == 'Railway transportation services' and i in self.listguillotine],
-            #     'energy', 'Energy', 'Railway transportation services')
-            # self.A_io_f_uncorrected += self.A_io.dot(rail_transportation_add_on[0] * inflation * Geo) * \
-            #                            rail_transportation_add_on[1]
-            # del rail_transportation_add_on
-
-            # REMOVE AFTER
-            self.A_io_f_uncorrected = self.A_io.dot(basic_H_for_hyb * inflation * Geo) * self.PRO_f.price
-            self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
-
-            self.capitals = False
-            self.description.append('Capitals were not endogenized')
+        self.A_io_f_uncorrected = self.A_io.dot(H_for_hyb * inflation * Geo) * self.PRO_f.price
+        self.A_io_f_uncorrected = self.A_io_f_uncorrected.astype(dtype='float32')
 
         # ------ DOUBLE COUNTING PART -------
 
@@ -982,10 +792,6 @@ class LCAIO:
             lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
             lambda_filter_matrix[lambda_filter_matrix == 0] = 1
             lambda_filter_matrix = lambda_filter_matrix.fillna(0)
-            # if capitals_method == 'LCA' or capitals_method == 'IO':
-            #     # double counting of capitals must be corrected in K_io_f and not A_io_f
-            #     lambda_filter_matrix.loc[[i for i in lambda_filter_matrix.index
-            #                               if i[1] in self.list_of_capital_sectors]] = 1
             lambda_filter_matrix = lambda_filter_matrix.astype(dtype='float32')
 
             self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
@@ -1028,10 +834,6 @@ class LCAIO:
 
             self.double_counting = 'STAM'
             self.description.append('STAM')
-
-            # Since we endogenized capitals we need to remove them from both final demand and factors of production
-            self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
-            self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
 
     # ---------------------PREPARATIONS FOR THE HYBRIDIZATION----------------------
 
@@ -1237,7 +1039,8 @@ class LCAIO:
             pkg_resources.resource_string(__name__, '/Data/Classing_countries.txt').decode('utf-8'))
         for process in self.PRO_f.index:
             if process in df.index:
-                self.PRO_f.io_geography[process] = dict_[self.PRO_f.io_geography[process]]
+                if dict_[self.PRO_f.io_geography[process]] == 'RER':
+                    self.PRO_f.io_geography[process] = dict_[self.PRO_f.io_geography[process]]
 
     def extend_inventory(self):
         """ Method creating a new technology matrix for the LCA database in which the inputs of processes not to
@@ -1263,158 +1066,14 @@ class LCAIO:
         # the inversion brings a lot of noise which falsely contributes to double counting which is why it is removed
         self.A_ff_processed[self.A_ff_processed < 10 ** -16] = 0
 
-    def extract_scaling_vector_technosphere(self, list_add_on_to_hyb, scaling_flow, sector_of_scaling_flow,
-                                            sector_of_add_ons):
-        """This functions extracts the scaling vector used to bypass the poor price data quality of some processes
-        of ecoinvent
-        Args:
-        ----
-            list_add_on_to_hyb: a list of uuids of processes for which scaling vectors are needed
-            scaling_flow: the name of the flow on which to scale ('concrete','steel','kerosene','aluminium',
-                         'electricity')
-            sector_of_scaling_flow: the economic sector of the scaling flow
-            sector_of_add_ons: the economic sector of the processes that are part of the add_on
-
-        """
-        add_on_H_for_hyb = self.H.copy()
-        add_on_H_for_hyb.loc[:, [i for i in add_on_H_for_hyb.columns if i not in list_add_on_to_hyb]] = 0
-
-        dff = self.extract_flow_amounts_technosphere(list_add_on_to_hyb, scaling_flow)
-
-        scaling_vector = self.PRO_f.price.copy()
-        scaling_vector.loc[:] = 0
-        if sector_of_scaling_flow == 'Energy':
-            list_energies = ['Electricity by Geothermal', 'Electricity by biomass and waste', 'Electricity by coal',
-                             'Electricity by gas', 'Electricity by hydro', 'Electricity by nuclear',
-                             'Electricity by petroleum and other oil derivatives', 'Electricity by solar photovoltaic',
-                             'Electricity by solar thermal', 'Electricity by tide, wave, ocean', 'Electricity by wind',
-                             'Electricity nec', 'Gas/Diesel Oil']
-            scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[list_energies, sector_of_add_ons].sum() /
-                                                    self.number_of_countries_IO)).iloc[:, 0]
-        elif sector_of_scaling_flow == 'CO2':
-            list_CO2_extensions = [i for i in self.F_io.index if 'CO2' in i]
-            scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions,
-                                                                             sector_of_add_ons].sum() /
-                                                    self.number_of_countries_IO)).iloc[:, 0]
-        else:
-            scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[sector_of_scaling_flow,
-                                                                             sector_of_add_ons] /
-                                                    self.number_of_countries_IO)).iloc[:, 0]
-        return add_on_H_for_hyb, scaling_vector
-
-    def extract_scaling_vector_biosphere(self, what_is_treated, treatment, inflation, Geo):
-        """This functions extracts the scaling vector used to bypass the poor price data quality of some processes
-        of ecoinvent
-        Args:
-        ----
-            list_add_on_to_hyb: a list of uuids of processes for which scaling vectors are needed
-            scaling_flow: the name of the flow on which to scale ('concrete','steel','kerosene','aluminium',
-                         'electricity')
-            sector_of_scaling_flow: the economic sector of the scaling flow
-            sector_of_add_ons: the economic sector of the processes that are part of the add_on
-
-        """
-        add_on_H_for_hyb = self.H.copy()
-        list_add_on_to_hyb = [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-             == str(what_is_treated) + ' waste for treatment: ' + str(treatment) and (i in self.listguillotine or
-                                                                                     self.null_price)
-             and 'market for' not in self.PRO_f.activityName[i] and i not in self.list_to_hyb]
-
-        add_on_H_for_hyb.loc[:, [i for i in add_on_H_for_hyb.columns if i not in list_add_on_to_hyb]] = 0
-
-        if treatment == 'incineration':
-            dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, False)
-        else:
-            dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, True)
-
-        scaling_vector = self.PRO_f.price.copy()
-        scaling_vector.loc[:] = 0
-        list_CO2_extensions = [i for i in self.F_io.index if 'CO2' in i]
-        scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
-                                                                         ' waste for treatment: ' + str(treatment)].
-                                                sum() /self.number_of_countries_IO)).iloc[:, 0]
-
-        self.A_io_f_uncorrected += (self.A_io + self.K_io).dot(add_on_H_for_hyb * inflation * Geo) * scaling_vector
-
-    def extract_flow_amounts_technosphere(self, list_of_uuids, flow):
-        """This function extracts the amount (in euros) necessary for the determination of a scaling vector
-        from the list of uuids passed as an argument. Only flows from the technosphere are accepted in this function.
-
-        Args:
-        ----
-            list_of_uuids: a list of UUIDs from which to extract the scaling vector values
-            flow: the name of the flow on which to scale ('concrete','steel','kerosene','aluminium','energy')
-
-        Returns:
-        -------
-            a dataframe of the values of the desired flow (concrete, steel, etc.) per UUID
-        """
-        dictt = {}
-        for element in list_of_uuids:
-            dict_technosphere = {}
-            amount = 0
-            technosphere = self.A_ff.loc[:, element]
-            for index in technosphere.index:
-                if technosphere[index] != 0:
-                    dict_technosphere[index] = technosphere[index]
-            for key in dict_technosphere.keys():
-                if flow == 'concrete':
-                    if 'concrete' in self.PRO_f.productName[key] or 'cement, unspecified' in \
-                            self.PRO_f.productName[key]:
-                        amount += dict_technosphere[key] * self.PRO_f.price[key]
-                    elif 'building, hall' in self.PRO_f.productName[key]:
-                        # 0.3m3 is the amount of concrete/m2 of building hall, 185 is the price of 1m3 of concrete
-                        amount += 0.3 * dict_technosphere[key] * 185
-                elif flow == 'steel':
-                    if 'steel' in self.PRO_f.productName[key] or 'cast iron' in self.PRO_f.productName[key]:
-                        amount += dict_technosphere[key] * self.PRO_f.price[key]
-                elif flow == 'energy':
-                    if 'electricity' in self.PRO_f.productName[key] or 'diesel' in self.PRO_f.productName[key]:
-                        amount += dict_technosphere[key] * self.PRO_f.price[key]
-                else:
-                    if flow in self.PRO_f.productName[key]:
-                        amount += dict_technosphere[key] * self.PRO_f.price[key]
-            dictt[element] = amount
-        return pd.DataFrame(list(dictt.values()), index=list(dictt.keys()))
-
-    def extract_flow_amounts_biosphere(self, list_of_uuids, biogenic=True):
-        """This function extracts the amount (in euros) necessary for the determination of a scaling vector
-        from the list of uuids passed as an argument. Only flows from the biosphere are accepted in this function.
-        By default, the flow will be CO2 (for now).
-
-        Args:
-        ----
-            list_of_uuids   : a list of UUIDs from which to extract the scaling vector values
-            biogenic        : boolean, if biogenic carbon is to be added to the total amount of carbon or not
-
-        Returns:
-        -------
-            a dataframe of the values of the desired flow (concrete, steel, etc.) per UUID
-        """
-        dictt = {}
-        for element in list_of_uuids:
-            dict_biosphere = {}
-            amount = 0
-            biosphere = self.F_f.loc[:, element]
-            for index in biosphere.index:
-                if biosphere[index] != 0:
-                    dict_biosphere[index] = biosphere[index]
-            for key in dict_biosphere.keys():
-                if biogenic:
-                    if 'Carbon dioxide' in self.STR_f.loc[key, 'FULLNAME']:
-                        amount += dict_biosphere[key]
-                elif not biogenic:
-                    if ('Carbon dioxide' in self.STR_f.loc[key, 'FULLNAME']
-                            and 'non-fossil' not in self.STR_f.loc[key, 'FULLNAME']):
-                        amount += dict_biosphere[key]
-            dictt[element] = amount
-        return pd.DataFrame(list(dictt.values()), index=list(dictt.keys()))
-
     # -------------------------- EXPORT RESULTS -----------------------------------
 
-    def save_system(self):
-        """ Export the hybridized database to dataframe via pickle
+    def save_system(self, format):
+        """ Export the hybridized database to dataframe via pickle or csv
 
+        Args:
+        -----
+                format: 'pickle' to return results as a pickle / 'csv' to return the A_io_f matrix as a csv file
         Returns:
         --------
             A pickle of the hybrid system exported to the corresponding folder in the pylcaio package
@@ -1423,93 +1082,62 @@ class LCAIO:
 
         hybrid_system = {'PRO_f': self.PRO_f, 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                          'F_f': self.F_f, 'F_io': self.F_io, 'F_io_f': self.F_io_f,
-                         'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
+                         'C_f': self.C_f, 'C_io': self.C_io,
                          'list_to_hyb': self.list_to_hyb, 'description': self.description}
-
-        if self.capitals and self.double_counting == 'STAM':
+        if self.double_counting == 'STAM':
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
                                                                             self.io_database_name_and_version +
-                                                                            '_with_capitals_STAM/')):
+                                                                            '_STAM/')):
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_STAM/'))
+                                                         '_STAM/'))
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
                                                                             self.io_database_name_and_version +
-                                                                            '_with_capitals_STAM/__init__.py')):
+                                                                            '_STAM/__init__.py')):
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_STAM/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_with_capitals_STAM/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
-        elif self.capitals and self.double_counting == 'binary':
+                                                         '_STAM/__init__.py'))
+            if format == 'pickle':
+                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                          self.lca_database_name_and_version + '_' +
+                                                                          self.io_database_name_and_version +
+                                                                          '_STAM/hybrid_system.pickle')),
+                               'wb') as f:
+                    pickle.dump(hybrid_system, f)
+            elif format == 'csv':
+                self.A_io_f.to_csv(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                   self.lca_database_name_and_version + '_' +
+                                                                   self.io_database_name_and_version +
+                                                                   '_STAM/A_io_f.csv'))
+        elif self.double_counting == 'binary':
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
                                                                             self.io_database_name_and_version +
-                                                                            '_with_capitals_binary/')):
+                                                                            '_binary/')):
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_binary/'))
+                                                         '_binary/'))
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
                                                                             self.io_database_name_and_version +
-                                                                            '_wtih_capitals_binary/__init__.py')):
+                                                                            '_binary/__init__.py')):
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
                                                          '_' + self.io_database_name_and_version +
-                                                         '_with_capitals_binary/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_with_capitals_binary/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
-        elif not self.capitals and self.double_counting == 'STAM':
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_STAM/')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_STAM/'))
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_STAM/__init__.py')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_STAM/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_STAM/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
-        elif not self.capitals and self.double_counting == 'binary':
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_binary/')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_binary/'))
-            if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                            self.lca_database_name_and_version + '_' +
-                                                                            self.io_database_name_and_version +
-                                                                            '_no_capitals_binary/__init__.py')):
-                os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_no_capitals_binary/__init__.py'))
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_binary/hybrid_system.pickle')),
-                           'wb') as f:
-                pickle.dump(hybrid_system, f)
+                                                         '_binary/__init__.py'))
+            if format == 'pickle':
+                with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                          self.lca_database_name_and_version + '_' +
+                                                                          self.io_database_name_and_version +
+                                                                          '_binary/hybrid_system.pickle')),
+                               'wb') as f:
+                    pickle.dump(hybrid_system, f)
+            elif format == 'csv':
+                self.A_io_f.to_csv(pkg_resources.resource_filename(__name__, '/Databases/' +
+                                                                   self.lca_database_name_and_version + '_' +
+                                                                   self.io_database_name_and_version +
+                                                                   '_binary/A_io_f.csv'))
 
 
 class Analysis:
@@ -1531,52 +1159,30 @@ class Analysis:
 
     """
 
-    def __init__(self, lca_database_name_and_version, io_database_name_and_version, method_double_counting,
-                 capitals=False):
+    def __init__(self, lca_database_name_and_version, io_database_name_and_version, method_double_counting):
 
         self.lca_database_name_and_version = lca_database_name_and_version
         self.io_database_name_and_version = io_database_name_and_version
 
-        if capitals and method_double_counting == 'STAM':
+        if method_double_counting == 'STAM':
             with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                       self.lca_database_name_and_version + '_' +
                                                                       self.io_database_name_and_version +
-                                                                      '_with_capitals_STAM/hybrid_system.pickle')),
+                                                                      '_STAM/hybrid_system.pickle')),
                            'rb') as f:
                 self.hybrid_system = pd.read_pickle(f)
-            self.capitals = True
             self.double_counting = 'STAM'
-        elif capitals and method_double_counting == 'binary':
+        elif method_double_counting == 'binary':
             with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                       self.lca_database_name_and_version + '_' +
                                                                       self.io_database_name_and_version +
-                                                                      '_with_capitals_binary/hybrid_system.pickle')),
+                                                                      '_binary/hybrid_system.pickle')),
                            'rb') as f:
                 self.hybrid_system = pd.read_pickle(f)
-            self.capitals = True
-            self.double_counting = 'binary'
-        elif not capitals and method_double_counting == 'STAM':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_STAM/hybrid_system.pickle')),
-                           'rb') as f:
-                self.hybrid_system = pd.read_pickle(f)
-            self.capitals = False
-            self.double_counting = 'STAM'
-        elif not capitals and method_double_counting == 'binary':
-            with gzip.open((pkg_resources.resource_filename(__name__, '/Databases/' +
-                                                                      self.lca_database_name_and_version + '_' +
-                                                                      self.io_database_name_and_version +
-                                                                      '_no_capitals_binary/hybrid_system.pickle')),
-                           'rb') as f:
-                self.hybrid_system = pd.read_pickle(f)
-            self.capitals = False
             self.double_counting = 'binary'
         else:
             print('Please enter the method to correct double counting with which the database you wish to analyze '
                   'was hybridized')
-            self.capitals = False
 
         self.PRO_f = self.hybrid_system['PRO_f']
         self.A_ff = self.hybrid_system['A_ff']
@@ -1587,7 +1193,6 @@ class Analysis:
         self.F_io_f = self.hybrid_system['F_io_f']
         self.C_f = self.hybrid_system['C_f']
         self.C_io = self.hybrid_system['C_io']
-        self.K_io = self.hybrid_system['K_io']
         self.list_to_hyb = self.hybrid_system['list_to_hyb']
         self.description = self.hybrid_system['description']
 
@@ -1640,37 +1245,20 @@ class Analysis:
     def calc_lifecycle(self):
         """ Simply calculates lifecycle production, emissions, or impacts
 
-        Args
-        ----
-            * capitals: boolean to know if capitals are incorporated or not in the calculations
-
         Returns
         -------
             * either lifecycle impact in self.d
 
         """
-
-        if self.capitals:
-            ak = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
-                                axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - ak, self.y)
-            d = self.C.values.dot(self.F).dot(x)
-            self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
-            print('Calculations done! Results are contained in self.d')
-
-        if not self.capitals:
-            a = np.concatenate(
-                [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
-                                axis=1),
-                 np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                axis=0).astype(dtype='float32')
-            x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - a, self.y)
-            d = self.C.values.dot(self.F).dot(x)
-            self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
-            print('Calculations done! Results are contained in self.d')
+        a = np.concatenate(
+            [np.concatenate([self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
+                            axis=1),
+             np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
+            axis=0).astype(dtype='float32')
+        x = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)) - a, self.y)
+        d = self.C.values.dot(self.F).dot(x)
+        self.d = pd.DataFrame(d, self.C.index, self.A_ff.columns)
+        print('Calculations done! Results are contained in self.d')
 
     def contribution_analysis(self, type_of_analysis, UUID, impact_category):
         """ Method to execute multiple types of contribution analyses.
@@ -1691,27 +1279,15 @@ class Analysis:
         """
 
         if type_of_analysis == 'total':
-            if self.capitals:
-                X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
-                    [np.concatenate(
-                        [self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')],
-                        axis=1),
-                        np.concatenate([self.A_io_f.values, self.A_io.values + self.K_io.values], axis=1)],
-                    axis=0).astype(dtype='float32'),
-                                    np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                            self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]],
-                                                           axis=0))
-                                    )
-            else:
-                X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
-                    [np.concatenate(
-                        [self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
-                        np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
-                    axis=0).astype(dtype='float32'),
-                                    np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
-                                                            self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]],
-                                                           axis=0))
-                                    )
+            X = np.linalg.solve(np.eye(len(self.A_ff) + len(self.A_io)).astype(dtype='float32') - np.concatenate(
+                [np.concatenate(
+                    [self.A_ff.values, np.zeros((len(self.A_ff), len(self.A_io))).astype(dtype='float32')], axis=1),
+                    np.concatenate([self.A_io_f.values, self.A_io.values], axis=1)],
+                axis=0).astype(dtype='float32'),
+                                np.diag(np.concatenate([self.A_ff.values[:, self.PRO_f.index.get_loc(UUID)],
+                                                        self.A_io_f.values[:, self.PRO_f.index.get_loc(UUID)]],
+                                                       axis=0))
+                                )
 
         elif type_of_analysis == 'LCA':
             X = np.linalg.solve(np.eye(len(self.A_ff)).astype(dtype='float32') - self.A_ff.values,
