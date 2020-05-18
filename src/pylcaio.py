@@ -752,6 +752,7 @@ class LCAIO:
         self.null_price = []
         self.listguillotine = []
         self.list_uncovered_geographies = []
+        self.hybridized_processes = self.list_to_hyb.copy()
 
         self.A_ff_processed = pd.DataFrame()
         self.total_prod_country = pd.DataFrame()
@@ -1315,7 +1316,7 @@ class LCAIO:
         """
         add_on_H_for_hyb = self.H.copy()
         list_add_on_to_hyb = [i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
-             == str(what_is_treated) + ' waste for treatment: ' + str(treatment) and (
+                              == str(what_is_treated) + ' waste for treatment: ' + str(treatment) and (
                                       i in self.listguillotine or self.null_price) and
                               'market for' not in self.PRO_f.activityName[i] and
                               i not in self.list_to_hyb and
@@ -1447,6 +1448,8 @@ class LCAIO:
                                                  'concrete',
                                                  'Cement, lime and plaster',
                                                  'Construction work')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Construction work' and i in self.listguillotine])
 
         self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
                                                   'Other transport equipment' and i in self.listguillotine
@@ -1454,6 +1457,9 @@ class LCAIO:
                                                  'steel',
                                                  'Basic iron and steel and of ferro-alloys and first products thereof',
                                                  'Other transport equipment')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Other transport equipment' and i in self.listguillotine
+                                                  and 'aircraft' not in self.PRO_f.productName[i]])
 
         self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
                                                   'Other transport equipment' and i in self.listguillotine and
@@ -1461,45 +1467,136 @@ class LCAIO:
                                                  'aluminium',
                                                  'Aluminium and aluminium products',
                                                  'Other transport equipment')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Other transport equipment' and i in self.listguillotine and
+                                                  'aircraft' in self.PRO_f.productName[i]])
 
         self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
                                                   'Machinery and equipment n.e.c.' and i in self.listguillotine],
                                                  'steel',
                                                  'Basic iron and steel and of ferro-alloys and first products thereof',
                                                  'Machinery and equipment n.e.c.')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                            'Machinery and equipment n.e.c.' and i in self.listguillotine])
 
         self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
                                                   'Air transport services' and i in self.listguillotine],
                                                  'kerosene',
                                                  'Kerosene Type Jet Fuel',
                                                  'Air transport services')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Air transport services' and i in self.listguillotine])
 
         self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
                                                   'Railway transportation services' and i in self.listguillotine],
                                                  'energy',
                                                  'Energy',
                                                  'Railway transportation services')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i] ==
+                                                  'Railway transportation services' and i in self.listguillotine])
 
         self.extract_scaling_vector_biosphere('Food', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Food waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Paper', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Paper waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Plastic', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Plastic waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Intert/metal', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Intert/metal waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Textiles', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Textiles waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Wood', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Wood waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Oil/hazardous', 'incineration')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Oil/hazardous waste for treatment: incineration' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
 
         self.extract_scaling_vector_biosphere('Plastic', 'landfill')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Plastic waste for treatment: landfill' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Inert/metal/hazardous', 'landfill')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Inert/metal/hazardous waste for treatment: landfill' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Wood', 'landfill')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Wood waste for treatment: landfill' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
 
         self.extract_scaling_vector_biosphere('Food', 'waste water treatment')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Food waste for treatment: waste water treatment' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Other', 'waste water treatment')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Other waste for treatment: waste water treatment' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
 
         self.extract_scaling_vector_biosphere('Food', 'biogasification and land application')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Food waste for treatment: biogasification and land application' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Sewage sludge', 'biogasification and land application')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Sewage sludge waste for treatment: biogasification and land application' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
 
         self.extract_scaling_vector_biosphere('Food', 'composting and land application')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Food waste for treatment: composting and land application' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
         self.extract_scaling_vector_biosphere('Paper and wood', 'composting and land application')
+        self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                          == 'Paper and wood waste for treatment: composting and land application' and (
+                                                  i in self.listguillotine or self.null_price) and
+                                          'market for' not in self.PRO_f.activityName[i] and
+                                          i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
+
+        self.hybridized_processes = [item for sublist in self.hybridized_processes for item in sublist]
 
         self.A_ff = back_to_sparse(self.A_ff)
         self.F_f = back_to_sparse(self.F_f)
@@ -1523,7 +1620,7 @@ class LCAIO:
                     'Regionalized flows/impacts available' not in self.description):
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'K_io_f': self.K_io_f, 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                                  'impact_categories_IO': self.extended_impact_names_IW_exio,
@@ -1532,14 +1629,14 @@ class LCAIO:
                     'Impact World+ was used' not in self.description):
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'K_io_f': self.K_io_f, 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                                  'IMP': self.IMP.to_dict(), 'impact_categories_IO': self.extended_impact_names_CML}
             elif 'Regionalized flows/impacts available' in self.description:
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'K_io_f': self.K_io_f, 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                                  'impact_categories_IO': self.extended_impact_names_IW_exio,
@@ -1552,7 +1649,7 @@ class LCAIO:
             else:
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io, 'K_io': self.K_io,
-                                 'K_io_f': self.K_io_f, 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'K_io_f': self.K_io_f, 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.flows_of_IO, 'impact_categories_IO': self.impact_methods_IO,
                                  'IMP': self.IMP.to_dict(), 'STR': self.STR_f.to_dict()}
@@ -1561,7 +1658,7 @@ class LCAIO:
                     'Regionalized flows/impacts available' not in self.description):
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
-                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                                  'impact_categories_IO': self.extended_impact_names_IW_exio,
@@ -1570,14 +1667,14 @@ class LCAIO:
                     'Impact World+ was used' not in self.description):
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
-                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                                  'IMP': self.IMP.to_dict(), 'impact_categories_IO': self.extended_impact_names_CML}
             elif 'Regionalized flows/impacts available' in self.description:
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
-                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.extended_flows_names, 'STR': self.STR_f.to_dict(),
                                  'impact_categories_IO': self.extended_impact_names_IW_exio,
@@ -1590,7 +1687,7 @@ class LCAIO:
             else:
                 hybrid_system = {'PRO_f': self.PRO_f.to_dict(), 'A_ff': self.A_ff, 'A_io': self.A_io, 'A_io_f': self.A_io_f,
                                  'F_f': self.F_f, 'F_io': self.F_io, 'C_f': self.C_f, 'C_io': self.C_io,
-                                 'list_to_hyb': self.list_to_hyb, 'description': self.description,
+                                 'hybridized_processes': self.hybridized_processes, 'description': self.description,
                                  'sectors_of_IO': self.sectors_of_IO, 'regions_of_IO': self.regions_of_IO,
                                  'flows_of_IO': self.flows_of_IO, 'impact_categories_IO': self.impact_methods_IO,
                                  'IMP': self.IMP.to_dict(), 'STR': self.STR_f.to_dict()}
@@ -1661,7 +1758,7 @@ class Analysis:
         self.C_f = self.hybrid_system['C_f']
         self.C_io = self.hybrid_system['C_io']
         self.STR = self.hybrid_system['STR']
-        self.list_to_hyb = self.hybrid_system['list_to_hyb']
+        self.hybridized_processes = self.hybrid_system['hybridized_processes']
         self.description = self.hybrid_system['description']
         self.flows_of_IO = self.hybrid_system['flows_of_IO']
         self.regions_of_IO = self.hybrid_system['regions_of_IO']
@@ -1757,13 +1854,13 @@ class Analysis:
                 self.D = pd.DataFrame(scipy.sparse.vstack([self.C.dot(self.total_emissions_not_regio),
                                                            self.C_regio.dot(self.total_emissions_regio)]).todense(),
                                       index=self.non_regio_impacts_index+self.regio_impacts_index,
-                                      columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
+                                      columns=self.PRO_f['activityId']).loc[:, self.hybridized_processes]
             else:
                 self.total_emissions = scipy.sparse.vstack([self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(
                     self.A_io_f+self.K_io_f).dot(self.Lp)])
                 self.D = pd.DataFrame(
                     (self.C.dot(self.total_emissions)).todense(),
-                    index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
+                    index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.hybridized_processes]
 
             print('Calculations done! Results are contained in self.D')
 
@@ -1779,13 +1876,13 @@ class Analysis:
                 self.D = pd.DataFrame(scipy.sparse.vstack([self.C.dot(self.total_emissions_not_regio),
                                                            self.C_regio.dot(self.total_emissions_regio)]).todense(),
                                       index=self.non_regio_impacts_index+self.regio_impacts_index,
-                                      columns=self.PRO_f['activityId']).loc[:, self.list_to_hyb]
+                                      columns=self.PRO_f['activityId']).loc[:, self.hybridized_processes]
             else:
                 self.total_emissions = scipy.sparse.vstack([self.F_f.dot(self.Lp), self.F_io.dot(self.Lio).dot(
                     self.A_io_f).dot(self.Lp)])
                 self.D = pd.DataFrame(
                     (self.C.dot(self.total_emissions)).todense(),
-                    index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.list_to_hyb]
+                    index=self.C_index, columns=self.PRO_f['activityName']).loc[:, self.hybridized_processes]
             print('Calculations done! Results are contained in self.D')
 
     def contributions(self, process):
