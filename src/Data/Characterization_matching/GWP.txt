@@ -1,2 +1,3 @@
 ['CML 2001; climate change; GWP 100a; kg CO2-Eq', 
-[('Problem oriented approach: baseline (CML, 2001)','global warming (GWP100)','GWP100 (IPCC, 2007)','kg CO2 eq.')]]
+[('Problem oriented approach: baseline (CML, 2001)','global warming (GWP100)','GWP100 (IPCC, 2007)','kg CO2 eq.')],
+'Global Climate Change']
