@@ -1,0 +1,1 @@
+['Acid Rain, kgSO2eq', 'Eutrophication, kgNOxeq', 'Freshwater Aquatic Ecotoxicity, CTUe', 'Global Climate Change, kgCO2eq', 'Human Toxicity, kg1,4-DBeq', 'Ozone Depletion, kgCFC-11eq', 'Smog Formation, kgO3eq']
