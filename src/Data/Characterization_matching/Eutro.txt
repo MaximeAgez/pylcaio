@@ -1,1 +1,3 @@
-['CML 2001; eutrophication potential; average European; kg NOx-Eq',[('Problem oriented approach: non baseline (CML, 2001)', 'eutrophication (incl. fate, average Europe total, A&B)', 'EP ( Huijbregts, 1999; average Europe total, A&B)', 'kg NOx eq.')]]
+['CML 2001; eutrophication potential; average European; kg NOx-Eq',
+[('Problem oriented approach: non baseline (CML, 2001)', 'eutrophication (incl. fate, average Europe total, A&B)', 'EP ( Huijbregts, 1999; average Europe total, A&B)', 'kg NOx eq.')],
+'Eutrophication']
