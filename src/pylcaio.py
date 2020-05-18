@@ -1090,8 +1090,7 @@ class LCAIO:
                                                                             self.io_database_name_and_version +
                                                                             '_STAM/')):
                 os.mkdir(pkg_resources.resource_filename(__name__, '/Databases/' + self.lca_database_name_and_version +
-                                                         '_' + self.io_database_name_and_version +
-                                                         '_STAM/'))
+                                                         '_' + self.io_database_name_and_version +'_STAM/'))
             if not os.path.exists(pkg_resources.resource_filename(__name__, '/Databases/' +
                                                                             self.lca_database_name_and_version + '_' +
                                                                             self.io_database_name_and_version +
