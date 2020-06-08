@@ -707,7 +707,7 @@ class LCAIO:
         self.IMP = pd.DataFrame()
         self.X_io = pd.DataFrame()
         self.C_io_regio = pd.DataFrame()
-        self.C_f_regio= pd.DataFrame()
+        self.C_f_regio = pd.DataFrame()
         self.F_io_regio = pd.DataFrame()
         self.F_f_regio = pd.DataFrame()
 
@@ -752,7 +752,7 @@ class LCAIO:
         self.null_price = []
         self.listguillotine = []
         self.list_uncovered_geographies = []
-        self.hybridized_processes = self.list_to_hyb.copy()
+        self.hybridized_processes = []
 
         self.A_ff_processed = pd.DataFrame()
         self.total_prod_country = pd.DataFrame()
@@ -1618,6 +1618,7 @@ class LCAIO:
                                           i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
 
         self.hybridized_processes = [item for sublist in self.hybridized_processes for item in sublist]
+        self.hybridized_processes += self.list_to_hyb
 
         self.A_ff = back_to_sparse(self.A_ff)
         self.F_f = back_to_sparse(self.F_f)
