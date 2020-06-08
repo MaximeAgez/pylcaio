@@ -711,6 +711,9 @@ class LCAIO:
         self.F_io_regio = pd.DataFrame()
         self.F_f_regio = pd.DataFrame()
 
+        self.K_io = pd.DataFrame()
+        self.K_io_f = pd.DataFrame()
+
         self.io_categories = defaultdict(list)
         self.categories_same_functionality = []
         self.processes_in_order = []
@@ -775,7 +778,7 @@ class LCAIO:
 
     # ----------------------------CORE METHOD-------------------------------------
 
-    def hybridize(self, method_double_counting):
+    def hybridize(self, method_double_counting, capitals=False):
         """ Hybridize an LCA database with an IO database
 
         self.A_io_f_uncorrected is calculated following the equation (1) of the paper [insert doi]
@@ -1283,6 +1286,14 @@ class LCAIO:
                              'Electricity nec', 'Gas/Diesel Oil']
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[list_energies, sector_of_add_ons].sum() /
                                                     self.number_of_countries_IO)).iloc[:, 0]
+        elif sector_of_scaling_flow == 'Electricity':
+            list_energies = ['Electricity by Geothermal', 'Electricity by biomass and waste', 'Electricity by coal',
+                             'Electricity by gas', 'Electricity by hydro', 'Electricity by nuclear',
+                             'Electricity by petroleum and other oil derivatives', 'Electricity by solar photovoltaic',
+                             'Electricity by solar thermal', 'Electricity by tide, wave, ocean', 'Electricity by wind',
+                             'Electricity nec']
+            scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[list_energies, sector_of_add_ons].sum() /
+                                                    self.number_of_countries_IO)).iloc[:, 0]
         else:
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[sector_of_scaling_flow,
                                                                              sector_of_add_ons] /
@@ -1380,6 +1391,10 @@ class LCAIO:
         elif flow == 'energy':
             keyword = [i for i in self.PRO_f.index if
                        ('electricity' in self.PRO_f.productName[i] or 'diesel' in self.PRO_f.productName[i])]
+            return pd.DataFrame(
+                self.A_ff.loc[keyword, list_of_uuids].mul(self.PRO_f.price.loc[keyword], axis=0).sum(axis=0))
+        elif flow == 'electricity':
+            keyword = [i for i in self.PRO_f.index if 'electricity' in self.PRO_f.productName[i]]
             return pd.DataFrame(
                 self.A_ff.loc[keyword, list_of_uuids].mul(self.PRO_f.price.loc[keyword], axis=0).sum(axis=0))
         else:
@@ -1547,13 +1562,29 @@ class LCAIO:
                                           'market for' not in self.PRO_f.activityName[i] and
                                           i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
 
-        self.extract_scaling_vector_biosphere('Food', 'waste water treatment')
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                  == 'Food waste for treatment: waste water treatment' and (
+                                                          i in self.listguillotine or self.null_price) and
+                                                  'market for' not in self.PRO_f.activityName[i] and
+                                                  i not in self.list_to_hyb and
+                                                  'open' not in self.PRO_f.activityName[i]],
+                                                 'electricity',
+                                                 'Electricity',
+                                                 'Food waste for treatment: waste water treatment')
         self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
                                           == 'Food waste for treatment: waste water treatment' and (
                                                   i in self.listguillotine or self.null_price) and
                                           'market for' not in self.PRO_f.activityName[i] and
                                           i not in self.list_to_hyb and 'open' not in self.PRO_f.activityName[i]])
-        self.extract_scaling_vector_biosphere('Other', 'waste water treatment')
+        self.extract_scaling_vector_technosphere([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
+                                                  == 'Other waste for treatment: waste water treatment' and (
+                                                          i in self.listguillotine or self.null_price) and
+                                                  'market for' not in self.PRO_f.activityName[i] and
+                                                  i not in self.list_to_hyb and
+                                                  'open' not in self.PRO_f.activityName[i]],
+                                                 'electricity',
+                                                 'Electricity',
+                                                 'Other waste for treatment: waste water treatment')
         self.hybridized_processes.append([i for i in self.H.columns if self.PRO_f.ProductTypeName[i]
                                           == 'Other waste for treatment: waste water treatment' and (
                                                   i in self.listguillotine or self.null_price) and
