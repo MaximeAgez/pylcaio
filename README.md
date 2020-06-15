@@ -1,5 +1,5 @@
 # pyLCAIO
-An object class that can structure, manipulate, and facilitate the hybridization of lifecycle assessment (LCA) and environmentally  extended input-output (EEIO) matrices.
+An object class to hybridize lifecycle assessment (LCA) and environmentally  extended input-output (EEIO) databases.
 
 * Only works with Python
 * Read in, combine, organize, manipulate and concatenate LCA foreground and background matrices
@@ -10,6 +10,8 @@ An object class that can structure, manipulate, and facilitate the hybridization
 * Includes matching of ecoinvent and EXIOBASE to Impact World+
 * Can accept capitals-endogenized version of EXIOBASE
 * Includes regionalized characterization matrices for use with Impact World+
+
+If you are just interested in the default hybrid database (if you do not want to or cannot run the code) you can find it here: https://zenodo.org/record/3890379
 
 The software is still under development but has already 2 operational versions.
 
