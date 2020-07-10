@@ -1714,7 +1714,7 @@ class LCAIO:
 
         if not os.path.exists(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version)):
-            os.mkdir(pkg_resources.resource_filename(
+            os.makedirs(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version))
 
         if not os.path.exists(pkg_resources.resource_filename(
