@@ -602,25 +602,25 @@ class DatabaseLoader:
 
         self.list_to_hyb = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'Hybridized').index.tolist()
+            'Hybridized', index_col=0).index.tolist()
         self.listmarket = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'Market').index.tolist()
+            'Market', index_col=0).index.tolist()
         self.listnottransacted = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'Not commercialized').index.tolist()
+            'Not commercialized', index_col=0).index.tolist()
         self.listguillotine = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'Poor quality').index.tolist()
+            'Poor quality', index_col=0).index.tolist()
         self.dummyprocesses = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'Empty processes').index.tolist()
+            'Empty processes', index_col=0).index.tolist()
         self.null_price = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'No price').index.tolist()
+            'No price', index_col=0).index.tolist()
         self.list_uncovered_geographies = pd.read_excel(pkg_resources.resource_stream(
             __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Filter.xlsx'),
-            'Uncovered geography').index.tolist()
+            'Uncovered geography', index_col=0).index.tolist()
         self.list_not_to_hyb = (
                 self.listmarket + self.listnottransacted + self.listguillotine + self.dummyprocesses
                 + self.null_price + self.list_uncovered_geographies)
@@ -759,9 +759,9 @@ class LCAIO:
         self.total_prod_region = pd.DataFrame()
         self.total_prod_RoW = pd.DataFrame()
         self.dictRoW = {}
-        self.STAM_table = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/STAM_table.xlsx'))
+        self.STAM_table = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/STAM_table.xlsx'), index_col=0 )
         self.patching_exiobase = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/'
-                                                                                       'Exiobase_patchwork.xlsx'))
+                                                                                       'Exiobase_patchwork.xlsx'), index_col=0)
         self.H = pd.DataFrame()
         self.G = pd.DataFrame()
         self.A_io_f_uncorrected = pd.DataFrame()
@@ -926,11 +926,9 @@ class LCAIO:
             self.F_io = back_to_sparse(self.F_io)
 
         # ---- HYBRIDIZATION WITHOUT PRICES ------
-
         self.apply_scaling_without_prices(self.capitals)
         del self.aggregated_A_io
         del self.aggregated_F_io
-
         self.A_io_f_uncorrected += pd.DataFrame(self.A_io.todense(), index=pd.MultiIndex.from_product(
                                                    [self.regions_of_IO, self.sectors_of_IO],
                                                    names=['region', 'sector']), columns=pd.MultiIndex.from_product(
@@ -1102,7 +1100,8 @@ class LCAIO:
          """
 
         electricity_price = pd.read_excel(pkg_resources.resource_stream(__name__,
-                                                                        '/Data/Regionalized_electricity_prices.xlsx'))
+                                                                        '/Data/Regionalized_electricity_prices.xlsx'),
+                                                                        index_col=0)
 
         electricity_processes = self.PRO_f.price.loc[
             [i for i in self.PRO_f.index if
@@ -1112,7 +1111,6 @@ class LCAIO:
         if electricity_processes.empty:
             print('Empty!')
             return
-
         merged = self.PRO_f.loc[electricity_processes.index.values, ['price', 'io_geography']].merge(
             electricity_price, left_on=['io_geography'], right_on=electricity_price.index, how='left')
         merged.prices[merged.prices.isnull()] = merged.price
@@ -1716,13 +1714,13 @@ class LCAIO:
 
         if not os.path.exists(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version)):
-            os.mkdir(pkg_resources.resource_filename(
+            os.makedirs(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' + self.io_database_name_and_version))
 
         if not os.path.exists(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' +
                           self.io_database_name_and_version + '/__init__.py')):
-            os.mkdir(pkg_resources.resource_filename(
+            os.makedirs(pkg_resources.resource_filename(
                 __name__, '/Databases/' + self.lca_database_name_and_version + '_' +
                           self.io_database_name_and_version + '/__init__.py'))
 
