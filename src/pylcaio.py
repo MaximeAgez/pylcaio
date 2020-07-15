@@ -1244,10 +1244,13 @@ class LCAIO:
         ANT = self.A_ff.copy()
         ANT = pd.DataFrame(ANT.todense(), self.PRO_f.index, self.PRO_f.index)
         ANT.loc[self.list_to_hyb] = 0
+        ANT.fillna(0,inplace=True)
+
         # matrix of production processes
         Amarket = self.A_ff.copy()
         Amarket = pd.DataFrame(Amarket.todense(), self.PRO_f.index, self.PRO_f.index)
         Amarket.loc[self.listmarket] = 0
+        Amarket.fillna(0,inplace=True)
 
         self.A_ff_processed = Amarket.values.dot(np.linalg.inv(np.eye(len(ANT.values)) - ANT.values))
 
