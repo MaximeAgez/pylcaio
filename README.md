@@ -1,22 +1,22 @@
 # pyLCAIO
-An object class to hybridize lifecycle assessment (LCA) and environmentally  extended input-output (EEIO) databases.
+An object class to hybridize lifecycle assessment (LCA) and environmentally extended input-output (EEIO) databases.
 
-* Only works with Python
-* Read in, combine, organize, manipulate and concatenate LCA foreground and background matrices
-* Combine LCA system with EEIO matrices
-* Automate hybridization and correction for double-counting with two available methods (STAM and binary)
-* Can currently hybridize ecoinvent3.5 with exiobase3
-* Includes extrapolated additional environmental extensions for EXIOBASE
-* Includes matching of ecoinvent and EXIOBASE to Impact World+
+
+* Create your own LCA-IO hybrid database (e.g. combining ecoinvent and exiobase data)
+* Automates hybridization and correction for double-counting with two available methods (STAM and binary)
+* Default parameters only allow the hybridization of ecoinvent3.5 with EXIOBASE
 * Can accept capitals-endogenized version of EXIOBASE
+* Includes extrapolated additional environmental extensions for EXIOBASE (from USEEIO)
+* Includes matching of ecoinvent and EXIOBASE environmental flows to Impact World+
 * Includes regionalized characterization matrices for use with Impact World+
+* Can be exported to brightway2
 
 If you are just interested in the default hybrid database (if you do not want to or cannot run the code) you can find it here: https://zenodo.org/record/3890379
 
-The software is still under development but has already 2 operational versions.
+This software is still under development.
 
 # System requirements
-Memory: 8GB RAM
+Under 8GM of RAM you will most likely run into a MemorryError, making it impossible to generate a database
 
 # Dependencies
 * Python 3
@@ -26,6 +26,8 @@ Memory: 8GB RAM
 * pymrio
 * ecospold2matrix
 * pickle
+* brightway2
+* bw2agg
 
 # Related publications
 * Majeau-Bettez, G., Agez, M., Wood, R., Södersten, C., Margni, M., Strømman, A. H., & Samson, R. (2017). Streamlined Hybridization software: merging Ecoinvent and Exiobase. In Biennial Conference of the International Society for Industrial Ecology.
