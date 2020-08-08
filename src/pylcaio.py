@@ -30,7 +30,9 @@ import pickle
 import ast
 import pkg_resources
 import warnings
-from time import time
+from brightway2 import *
+from bw2agg.scores import add_all_unit_score_exchanges_and_cfs
+import hashlib
 
 pd.set_option('mode.chained_assignment', None)
 
@@ -2006,6 +2008,261 @@ class Analysis:
             return PRO_f.loc[[i for i in PRO_f.index if activity in PRO_f.activityName[i]]]
         else:
             print('Enter at least a product or an activity')
+
+    def export_to_brightway2(self, bw2_project_name, created_database_name, path_to_ecoinvent_ecospold_datasets,
+                             aggregated=False):
+        """
+        Exporting the hybrid database into brightway2 in a disaggregated format.
+
+        :args:  bw2_project_name: (string) the name of the brightway2 project in which the hybrid database will be
+                                           imported. Note that the method creates and deletes an 'ecoinvent3.5 cut-off'
+                                           database. If you use an already-existing project and have a database named
+                                           'ecoinvent3.5 cut-off', it will be overwritten and deleted.
+               path_to_ecoinvent_ecospold_datasets: (string) path to the ecospold files of ecoinvent3.5
+               aggregated: (boolean) if True Contribution analyses will show the contribution aggregated IO complements
+                                             comparatively to ecoinvent inputs. Takes 1h30 to 2h to import.
+                                     if False Contribution analyses will show the contribution of each IO complement
+                                              comparatively to ecoinvent inputs. Takes 4 to 5h to import.
+
+        :return: nothing, but it creates two databases ('exiobase' and 'hybrid_ecoinvent') into the selected
+                 brightway2 project
+        """
+
+        if 'Regionalized flows/impacts available' in self.description:
+            print('Cannot export regionalized version to brightway2.')
+            return
+
+        # creating a new bw2 project
+        projects.set_current(bw2_project_name)
+
+        # importing elementary flows and default LCIA methods
+        bw2setup()
+
+        # loading the IMPACT World+ LCIA method into the project
+        BW2Package.import_file(pkg_resources.resource_stream(__name__, '/Data/for_export_in_brightway2/'
+                                                                       'laurepatou-IMPACT-World-in-Brightway-d949b33/'
+                                                                       'Brightway_IW_damage_1_46_and_midpoint_1_28.bw2package'))
+
+        # importing ecoinvent3.5 cut-off into the project
+        eco_importer = SingleOutputEcospold2Importer(path_to_ecoinvent_ecospold_datasets, 'ecoinvent3.5 cut-off')
+        eco_importer.apply_strategies()
+        eco_importer.write_database()
+
+        if not aggregated:
+            # importing exiobase into the project
+            self.import_exiobase_into_brightway2()
+
+        # importing hybrid ecoinvent
+        self.import_hybrid_ecoinvent_into_brightway2(created_database_name, aggregated)
+
+    def import_exiobase_into_brightway2(self):
+
+        print('Starting import of exiobase')
+        print('Aggregating results')
+        # calculating aggregated results for exiobase
+        self.Lio = scipy.sparse.csr_matrix(
+            np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
+        aggregated_results = pd.DataFrame((self.C_io.dot(self.F_io).dot(self.Lio)).todense(), self.impact_categories_IO,
+                                          pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
+        print('Formating data')
+        # create hash codes for exiobase sectors
+        give_hash_to_exio = dict.fromkeys(aggregated_results.columns)
+        give_hash_to_exio = {k: hashlib.md5(str(k).encode()).hexdigest() for k, v in give_hash_to_exio.items()}
+        aggregated_results.columns = [give_hash_to_exio[i] for i in aggregated_results.columns]
+
+        # link IMPACT World+ impact categories typology to the methods abbreviations used in brightway2
+        IW_pylcaio_to_bw2 = dict.fromkeys(self.impact_categories_IO)
+        for IW_category in IW_pylcaio_to_bw2:
+            if 'PDF' in IW_category or 'DALY' in IW_category:
+                IW_pylcaio_to_bw2[IW_category] = \
+                methods.get(('IMPACTWorld+ (Default_Recommended_Damage 1.46)', IW_category.split(' (')[0]))[
+                    'abbreviation']
+            else:
+                IW_pylcaio_to_bw2[IW_category] = \
+                methods.get(('IMPACTWorld+ (Default_Recommended_Midpoint 1.28)', IW_category.split(' (')[0]))[
+                    'abbreviation']
+        aggregated_results.index = list(IW_pylcaio_to_bw2.values())
+
+        # create dummy exchanges and characterization factors to enable the storing of LCIA scores into exchanges
+        add_all_unit_score_exchanges_and_cfs()
+
+        # formatting exiobase data
+        bw2_dict = dict.fromkeys(list(zip(['exiobase'] * len(aggregated_results.columns), aggregated_results.columns)),
+                                 {
+                                     'name': '',
+                                     'unit': '',
+                                     'location': '',
+                                     'exchanges': [],
+                                 })
+
+        for sector_hash in aggregated_results.columns:
+            bw2_dict[('exiobase', sector_hash)] = {
+                'name': list({k: v for k, v in give_hash_to_exio.items() if v == sector_hash}.keys())[0][1],
+                'unit': 'euro',
+                'location': list({k: v for k, v in give_hash_to_exio.items() if v == sector_hash}.keys())[0][0],
+                'exchanges': aggregated_results.loc[:, sector_hash][
+                    aggregated_results.loc[:, sector_hash] != 0].to_dict()}
+        for sector_hash in aggregated_results.columns:
+            bw2_dict[('exiobase', sector_hash)]['exchanges'] = list(
+                {k: {'input': ('biosphere3', k), 'amount': v, 'type': 'biosphere'} for k, v in
+                 bw2_dict[('exiobase', sector_hash)]['exchanges'].items()}.values())
+        print('Writing exiobase database')
+        # importing the aggregated exiobase into the project
+        Database('exiobase').write(bw2_dict)
+        print('Created exiobase database')
+
+    def import_hybrid_ecoinvent_into_brightway2(self, created_database_name, aggregated):
+        print('Starting import of hybrid data')
+        db = Database('ecoinvent3.5 cut-off')
+        ecoinvent_metadata = pd.DataFrame.from_dict(self.PRO_f)
+
+        # need to match uuids used in pylcaio to hash codes used by brightway2
+        match_hash_to_uuid = dict.fromkeys([act.as_dict()['code'] for act in db])
+        for act in db:
+            match_hash_to_uuid[act.as_dict()['code']] = act.as_dict()['activity'] + '_' + act.as_dict()['flow']
+
+        if aggregated:
+            print('Aggregating data')
+            aggregated_results = self.aggregate_hybrid_ecoinvent()
+            print('Formating hybrid data')
+            # match LCIA methods
+            IW_pylcaio_to_bw2 = dict.fromkeys(aggregated_results.index)
+            for IW_category in IW_pylcaio_to_bw2:
+                if 'PDF' in IW_category or 'DALY' in IW_category:
+                    IW_pylcaio_to_bw2[IW_category] = \
+                    methods.get(('IMPACTWorld+ (Default_Recommended_Damage 1.46)', IW_category.split(' (')[0]))[
+                        'abbreviation']
+                else:
+                    IW_pylcaio_to_bw2[IW_category] = \
+                    methods.get(('IMPACTWorld+ (Default_Recommended_Midpoint 1.28)', IW_category.split(' (')[0]))[
+                        'abbreviation']
+            aggregated_results.index = list(IW_pylcaio_to_bw2.values())
+
+            match_uuid_to_hash = {v: k for k, v in match_hash_to_uuid.items()}
+            aggregated_results.columns = [match_uuid_to_hash[i] for i in aggregated_results.columns]
+
+            add_all_unit_score_exchanges_and_cfs()
+
+            bw2_dict = dict.fromkeys(list(zip([created_database_name] * len(aggregated_results.columns),
+                                              aggregated_results.columns)), {
+                'exchanges': [],
+            })
+
+            for process_hash in aggregated_results.columns:
+                bw2_dict[(created_database_name, process_hash)] = {
+                    'exchanges': aggregated_results.loc[:, process_hash][aggregated_results.loc[:, process_hash] != 0].to_dict()}
+            for process_hash in aggregated_results.columns:
+                bw2_dict[(created_database_name, process_hash)]['exchanges'] = list(
+                    {k: {'input': ('biosphere3', k), 'amount': v, 'type': 'biosphere'} for k, v in
+                     bw2_dict[(created_database_name, process_hash)]['exchanges'].items()}.values())
+            print('Matching ecoinvent data with hybrid data')
+            # to link ecoinvent exchanges to exiobase exchanges, we need the original ecoinvent to also be in a dict format
+            bw2_eco_dict = db.load()
+
+            # add IO complements to each ecoinvent process
+            for process in bw2_eco_dict.keys():
+                bw2_eco_dict[process]['exchanges'].extend(bw2_dict[(created_database_name, process[1])]['exchanges'])
+
+            # exchanges will be associated to the hybrid_ecoinvent_agg database of bw2 and not ecoinvent3.5 cut-off
+            bw2_hybrid_dict = {(created_database_name, k[1]): v for k, v in bw2_eco_dict.items()}
+            bw2_hybrid_dict = {
+                outer_k: {
+                    inner_k: [
+                        {k: (created_database_name, v[1]) if ((k == 'input' or k == 'output')
+                                                           and v[0] == 'ecoinvent3.5 cut-off')
+                         else v
+                         for k, v in i.items()}
+                        for i in bw2_hybrid_dict[outer_k][inner_k]
+                    ]
+                    if inner_k == 'exchanges' else inner_v
+                    for inner_k, inner_v in outer_v.items()
+                }
+                for outer_k, outer_v in bw2_hybrid_dict.items()
+            }
+            print('Deleting ecoinvent3.5 cut-off database')
+            del databases['ecoinvent3.5 cut-off']
+            print('Writing {} database'.format(created_database_name))
+            Database(created_database_name).write(bw2_hybrid_dict)
+            print('{} successfully imported'.format(created_database_name))
+
+        else:
+            A_io_f = pd.DataFrame(self.A_io_f.todense(),
+                                  pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]),
+                                  ecoinvent_metadata.index)
+            print('Formating hybrid data')
+            # create hash codes for exiobase sectors
+            give_hash_to_exio = dict.fromkeys(A_io_f.index)
+            give_hash_to_exio = {k: hashlib.md5(str(k).encode()).hexdigest() for k, v in give_hash_to_exio.items()}
+            # set those hash codes as index
+            A_io_f.index = [give_hash_to_exio[i] for i in list(A_io_f.index)]
+
+            # format the results from pylcaio (the A_io_f matrix) to be readable by brightway2
+            bw2_dict = dict.fromkeys(list(zip([created_database_name] * len(ecoinvent_metadata.index), match_hash_to_uuid)), {
+                'name': '',
+                'unit': '',
+                'location': '',
+                'exchanges': [],
+            })
+            for ecoinvent_uuid in ecoinvent_metadata.index:
+                hash_code = list({k: v for k, v in match_hash_to_uuid.items() if v == ecoinvent_uuid}.keys())[0]
+                bw2_dict[(created_database_name, hash_code)] = {'name': ecoinvent_metadata.loc[ecoinvent_uuid, 'activityName'],
+                                                             'unit': ecoinvent_metadata.loc[ecoinvent_uuid, 'unitName'],
+                                                             'location': ecoinvent_metadata.loc[
+                                                                 ecoinvent_uuid, 'geography'],
+                                                             'exchanges': A_io_f.loc[:, ecoinvent_uuid][
+                                                                 A_io_f.loc[:, ecoinvent_uuid] != 0].to_dict()}
+            for ecoinvent_uuid in ecoinvent_metadata.index:
+                hash_code = list({k: v for k, v in match_hash_to_uuid.items() if v == ecoinvent_uuid}.keys())[0]
+                bw2_dict[(created_database_name, hash_code)]['exchanges'] = list(
+                    {k: {'input': ('exiobase', k), 'amount': v, 'type': 'technosphere'} for k, v in
+                     bw2_dict[(created_database_name, hash_code)]['exchanges'].items()}.values())
+            print('Matching ecoinvent data with hybrid data')
+            # to link ecoinvent exchanges to exiobase exchanges, we need the original ecoinvent to also be in a dict format
+            bw2_eco_dict = Database('ecoinvent3.5 cut-off').load()
+
+            # add IO complements to each ecoinvent process
+            for process in bw2_eco_dict.keys():
+                bw2_eco_dict[process]['exchanges'].extend(bw2_dict[(created_database_name, process[1])]['exchanges'])
+
+            # exchanges will be associated to the hybrid_ecoinvent database of bw2 and not ecoinvent3.5 cut-off
+            bw2_hybrid_dict = {(created_database_name, k[1]): v for k, v in bw2_eco_dict.items()}
+
+            # we also need to replace the database name in the inputs. It's a bit trickier:
+            bw2_hybrid_dict = {
+                outer_k: {
+                    inner_k: [
+                        {k: (created_database_name, v[1]) if ((k == 'input' or k == 'output')
+                                                           and v[0] == 'ecoinvent3.5 cut-off')
+                         else v
+                         for k, v in i.items()}
+                        for i in bw2_hybrid_dict[outer_k][inner_k]
+                    ]
+                    if inner_k == 'exchanges' else inner_v
+                    for inner_k, inner_v in outer_v.items()
+                }
+                for outer_k, outer_v in bw2_hybrid_dict.items()
+            }
+            print('Deleting ecoinvent3.5 cut-off database')
+            # we remove the 'ecoinvent3.5 cut-off' database. Its taking unnecessary space.
+            del databases['ecoinvent3.5 cut-off']
+            print('Writing {} database'.format(created_database_name))
+            # write the formatted dictionary in the brightway2 database
+            Database(created_database_name).write(bw2_hybrid_dict)
+            print('{} successfully imported'.format(created_database_name))
+
+    def aggregate_hybrid_ecoinvent(self):
+
+        if 'Capitals were endogenized' in self.description:
+            self.Lio = scipy.sparse.csr_matrix(
+                np.linalg.solve(np.eye(self.A_io.shape[0]) - (self.A_io+self.K_io).todense(), np.eye(self.A_io.shape[0])))
+
+        else:
+            self.Lio = scipy.sparse.csr_matrix(
+                np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
+
+        impact_hybrid = pd.DataFrame(((self.C_io.dot(self.F_io).dot(self.Lio)).dot(self.A_io_f)).todense(),
+                                     index=self.impact_categories_IO, columns=self.PRO_f['activityName'])
+        return impact_hybrid
 
 
 def extract_version_from_name(name_database):
