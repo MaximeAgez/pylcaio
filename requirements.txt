@@ -1,0 +1,2 @@
+brightway2==2.3
+bw2agg==0.1.2
