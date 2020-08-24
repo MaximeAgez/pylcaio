@@ -1288,7 +1288,7 @@ class LCAIO:
                              'Electricity by solar thermal', 'Electricity by tide, wave, ocean', 'Electricity by wind',
                              'Electricity nec', 'Gas/Diesel Oil']
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[list_energies, sector_of_add_ons].sum() /
-                                                    self.number_of_countries_IO)).iloc[:, 0]
+                                                    (self.number_of_countries_IO+self.number_of_RoW_IO))).iloc[:, 0]
         elif sector_of_scaling_flow == 'Electricity':
             list_energies = ['Electricity by Geothermal', 'Electricity by biomass and waste', 'Electricity by coal',
                              'Electricity by gas', 'Electricity by hydro', 'Electricity by nuclear',
@@ -1296,11 +1296,11 @@ class LCAIO:
                              'Electricity by solar thermal', 'Electricity by tide, wave, ocean', 'Electricity by wind',
                              'Electricity nec']
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[list_energies, sector_of_add_ons].sum() /
-                                                    self.number_of_countries_IO)).iloc[:, 0]
+                                                    (self.number_of_countries_IO+self.number_of_RoW_IO))).iloc[:, 0]
         else:
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_A_io.loc[sector_of_scaling_flow,
                                                                              sector_of_add_ons] /
-                                                    self.number_of_countries_IO)).iloc[:, 0]
+                                                    (self.number_of_countries_IO+self.number_of_RoW_IO))).iloc[:, 0]
 
         self.add_on_H_scaled_vector = pd.concat([self.add_on_H_scaled_vector.drop(list_add_on_to_hyb, axis=1),
                                                  (add_on_H_for_hyb.multiply(scaling_vector)).loc[:,
@@ -1356,11 +1356,11 @@ class LCAIO:
         if what_is_treated == 'Sewage sludge':
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
                                                                              ' for treatment: ' + str(treatment)].
-                                                    sum() /self.number_of_countries_IO)).iloc[:, 0]
+                                                    sum() /(self.number_of_countries_IO+self.number_of_RoW_IO))).iloc[:, 0]
         else:
             scaling_vector.loc[dff.index] = (dff / (self.aggregated_F_io.loc[list_CO2_extensions, str(what_is_treated) +
                                                                              ' waste for treatment: ' + str(treatment)].
-                                                    sum() /self.number_of_countries_IO)).iloc[:, 0]
+                                                    sum() /(self.number_of_countries_IO+self.number_of_RoW_IO))).iloc[:, 0]
 
         self.add_on_H_scaled_vector = pd.concat([self.add_on_H_scaled_vector.drop(list_add_on_to_hyb, axis=1),
                                                  (add_on_H_for_hyb.multiply(scaling_vector)).loc[:,
