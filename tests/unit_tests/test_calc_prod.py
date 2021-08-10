@@ -8,7 +8,6 @@ sys.path.append(dir_name+'\\src')
 import pylcaio
 
 
-
 def test_calc_proc(random_LCA_system, random_IO_system, random_parameters):
     pylcaio_object = pylcaio.LCAIO(PRO_f = random_LCA_system['PRO_f'], A_ff = random_LCA_system['A_ff'],
                                    F_f = random_LCA_system['F_f'], C_f = random_LCA_system['C_f'],

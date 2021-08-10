@@ -540,31 +540,12 @@ class DatabaseLoader:
                 __name__,
                 '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
                 '/countries_per_regions.txt').decode('utf-8'))
-        self.replacements1 = ast.literal_eval(pkg_resources.resource_string(
-            __name__,
-            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-            '/geography_replacements_regions.txt').decode('utf-8'))
-        self.replacements2 = ast.literal_eval(pkg_resources.resource_string(
-            __name__,
-            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-            '/geography_replacements_other.txt').decode('utf-8'))
-        self.replacements3 = ast.literal_eval(pkg_resources.resource_string(
-            __name__,
-            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
-            '/geography_replacements_RoW.txt').decode('utf-8'))
 
-        self.PRO_f['io_geography'] = self.PRO_f.geography.copy()
-        self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements1, regex=True)
-        self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements2, regex=True)
-        self.PRO_f.io_geography = self.PRO_f.io_geography.replace(self.replacements3, regex=True)
-        # cannot replace these normally because they alter the existing regions of ecoinvent3.5
-        if version_ecoinvent == str(3.5):
-            self.PRO_f.io_geography[[
-                i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['ER', 'NA', 'TN']]] = 'WF'
-            self.PRO_f.io_geography[
-                [i for i in self.PRO_f.index if self.PRO_f.io_geography[i] in ['NI', 'AR']]] = 'WL'
-            if version_exiobase == 2:
-                self.PRO_f.io_geography[self.PRO_f.io_geography == 'HR'] = 'WE'
+        self.replacements = open(pkg_resources.resource_string(__name__,
+            '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +'/geography_replacements.txt'))
+        self.replacements = eval(self.replacements.read())
+
+        self.PRO_f['io_geography'] = [self.PRO_f[i] if i in self.PRO_f else i for i in self.PRO_f.geography]
 
         # PRODUCT CONCORDANCE
 

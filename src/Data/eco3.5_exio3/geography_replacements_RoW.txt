@@ -1,9 +1,0 @@
-{'TH':'WA','UA':'WE','NZ':'WA','PE':'WL','IL':'WM','CO':'WL','CR':'WL','EC':'WL','CL':'WL',
-'MY':'WA','PH':'WA','LK':'WA','KE':'WF','VN':'WA','HN':'WL','CI':'WF','GH':'WF','MG':'WF','CM':'WF','NG':'WF',
-'RME':'WM','DZ':'WF','TZ':'WF','PG':'WA','MA':'WF','IS':'WE','IR':'WM','RS':'WE','BA':'WE','MK':'WE','SA':'WM',
-'NP':'WA','BH':'WM','AM':'WE','GI':'WE','CG':'WF','BO':'WL','JM':'WL','ZW':'WF','LY':'WF','SN':'WF',
-'JO':'WM','PY':'WL','TM':'WA','DO':'WL','CU':'WL','BD':'WA','SD':'WF','PA':'WL','KP':'WA','ME':'WE','CW':'WL','UZ':'WA',
-'BW':'WF','KG':'WA','GA':'WF','GT':'WL','OM':'WM','KW':'WM','AE':'WM','ET':'WF','SV':'WL','CD':'WF','MD':'WE',
-'BY':'WE','AL':'WE','MZ':'WF','TT':'WL','TJ':'WA','TG':'WF','MN':'WA','MU':'WF','EG':'WF','SY':'WM','PK':'WA','MM':'WA',
-'NE':'WF','HT':'WL','QA':'WM','YE':'WM','KZ':'WA','XK':'WE','GE':'WE','ZM':'WF','SG':'WA','HK':'WA','VE':'WL','LB':'WM',
-'BN':'WA','SS':'WF','AO':'WF','KH':'WA','IQ':'WM','AZ':'WE','BJ':'WF','UY':'WL'}

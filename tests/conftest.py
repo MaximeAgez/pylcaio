@@ -64,8 +64,8 @@ def random_LCA_system():
     listmarket = [str(activityId2) + '_' + str(productId3)]
 
     dict_dataframes = {'PRO_f': PRO_f, 'A_ff': A_ff, 'F_f': F_f, 'C_f': C_f, 'STR_f': STR_f, 'y_f': y_f,
-                       'lca_database_name_and_version': lca_database_name_and_version, 'list_to_hyb':list_to_hyb,
-                       'list_not_to_hyb':list_not_to_hyb, 'listmarket':listmarket}
+                       'lca_database_name_and_version': lca_database_name_and_version, 'list_to_hyb': list_to_hyb,
+                       'list_not_to_hyb': list_not_to_hyb, 'listmarket': listmarket}
     return dict_dataframes
 
 @pytest.fixture()
