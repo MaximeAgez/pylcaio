@@ -139,7 +139,6 @@ class DatabaseLoader:
         self.regionalized_flow_names_eco = []
 
         self.listcountry = []
-        self.listregions = []
         self.countries_per_regions = defaultdict(list)
 
         self.replacements = {}
@@ -486,11 +485,7 @@ class DatabaseLoader:
                 __name__,
                 '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/countries.txt').decode(
                 'utf-8'))
-        self.listregions = ast.literal_eval(
-            pkg_resources.resource_string(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/regions.txt').decode(
-                'utf-8'))
+
         self.countries_per_regions = ast.literal_eval(
             pkg_resources.resource_string(
                 __name__,
@@ -567,7 +562,7 @@ class DatabaseLoader:
 
         return LCAIO(PRO_f=self.PRO_f, A_ff=self.A_ff, A_io=self.A_io, F_f=self.F_f, F_io=self.F_io, X_io=self.X_io,
                      y_io=self.y_io, C_f=self.C_f, C_io=self.C_io, STR_f=self.STR_f, IMP=self.IMP,
-                     listcountry=self.listcountry, listregions=self.listregions, K_io=self.K_io,
+                     listcountry=self.listcountry, K_io=self.K_io,
                      countries_per_regions=self.countries_per_regions, reference_year_IO=self.reference_year_IO,
                      number_of_countries_IO=self.number_of_countries_IO, number_of_RoW_IO=self.number_of_RoW_IO,
                      number_of_products_IO=self.number_of_products_IO, list_to_hyb=self.list_to_hyb,
@@ -679,7 +674,6 @@ class LCAIO:
         self.regionalized_flow_names_eco = []
 
         self.listcountry = []
-        self.listregions = []
         self.countries_per_regions = defaultdict(list)
 
         self.replacements1 = {}
@@ -767,8 +761,9 @@ class LCAIO:
 
         # translate the geography concordance txt files into matrices
         matrix_countries_per_region = pd.DataFrame(0, index=self.listcountry,
-                                                   columns=self.listcountry + self.listregions + list(
-                                                       self.dictRoW.keys()))
+                                                   columns=self.listcountry +
+                                                           list(self.countries_per_regions) +
+                                                           list(self.dictRoW.keys()))
         for country in self.listcountry:
             matrix_countries_per_region.loc[country, country] = 1
         for region in self.countries_per_regions.keys():
@@ -777,8 +772,9 @@ class LCAIO:
             matrix_countries_per_region.loc[self.dictRoW[RoW], RoW] = 1
 
         # identify which region corresponds to which process
-        region_covered_per_process = pd.DataFrame(0,
-                                                  index=self.listcountry + self.listregions + list(self.dictRoW.keys()),
+        region_covered_per_process = pd.DataFrame(0, index=self.listcountry +
+                                                          list(self.countries_per_regions) +
+                                                          list(self.dictRoW.keys()),
                                                   columns=self.PRO_f.index)
         for country in region_covered_per_process.index:
             df = pd.DataFrame(self.PRO_f.io_geography)[
@@ -2293,7 +2289,7 @@ def sum_elements_list(liste):
 
 
 def LCA_convention_to_IO(dataframe):
-    """ Changes the convetion of an LCA technology matrix from LCA to IO """
+    """ Changes the convention of a technology matrix from LCA to IO """
     # no ones on the diagonal
     dataframe[dataframe == 1] = 0
     # only positive values

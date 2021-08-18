@@ -1,9 +1,0 @@
-{'CA-QC':'CA','WECC, US only':'US','Canada without Quebec':'CA','CA-AB':'CA','HICC':'US','CA-SK':'CA','IAI Area, South America':'RLA','IAI Area, Africa':'RAF',
-'IAI Area, North America, without Quebec':'RNA','CA-BC':'CA','FRCC':'US','SPP':'US','CA-MB':'CA','CA-ON':'CA','CA-NS':'CA',
-'RNA, US only':'US','CA-NB':'CA','RFC':'US','MRO, US only':'US','ASCC':'US','CA-NT':'CA','NPCC, US only':'US','SERC':'US',
-'CA-YK':'CA','CA-PE':'CA','SGCC':'CN','CA-NF':'CA','CSG':'US','CA-NU':'CA','ENTSO-E':'RER','CENTREL':'RER','CN-HB':'CN',
-'CN-GS':'CN','CN-SC':'CN','CN-HU':'CN','CN-HL':'CN','CN-JS':'CN','CN-GD':'CN','CN-HE':'CN','CN-BJ':'CN','CN-YN':'CN',
-'CN-SA':'CN','CN-SX':'CN','CN-TJ':'CN','CN-AH':'CN','CN-NX':'CN','CN-XZ':'CN','CN-HN':'CN','CN-HA':'CN','CN-XJ':'CN',
-'CN-ZJ':'CN','CN-GX':'CN','CN-JL':'CN','CN-GZ':'CN','CN-QH':'CN','CN-LN':'CN','CN-SH':'CN','CN-NM':'CN','CN-FJ':'CN',
-'CN-JX':'CN','CN-SD':'CN','CN-CQ':'CN','CA-RoW':'CA','CN-RoW':'CN'}
-

@@ -1,4 +1,0 @@
-['GLO','RER','Europe without Switzerland','RNA','WEU','RLA','RAF','RAS','NORDEL','UCTE','UCTE without Germany',
-'RER w/o CH+DE','IAI Area, Russia & RER w/o EU27 & EFTA','IAI Area, Asia, without China and GCC',
-'IAI Area, Gulf Cooperation Council','IAI Area, EU27 & EFTA','UN-OCEANIA','RER w/o DE+NL+NO','RER w/o DE+NL+RU',
-'Europe without Austria', 'Europe without Switzerland and Austria']

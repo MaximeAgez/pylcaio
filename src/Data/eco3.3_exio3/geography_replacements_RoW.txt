@@ -1,4 +1,0 @@
-{'AR':'WL','TH':'WA','UA':'WE','NZ':'WA','PE':'WL','IL':'WM','CO':'WL','CR':'WL','EC':'WL','CL':'WL',
-'MY':'WA','PH':'WA','LK':'WA','KE':'WF','VN':'WA','HN':'WL','CI':'WF','GH':'WF','MG':'WF','TN':'WF','CM':'WF','NG':'WF',
-'RME':'WM','DZ':'WF','TZ':'WF','PG':'WA','MA':'WF','IS':'WE','IR':'WM','RS':'WE','BA':'WE','MK':'WE','SA':'WM'}
-
