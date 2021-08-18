@@ -163,6 +163,10 @@ class DatabaseLoader:
         self.LCA_database = lca_database_processed
         self.IO_database = io_database_processed
 
+        self.LCA_database['A'] = self.LCA_database['A'].fillna(0)
+        self.LCA_database['F'] = self.LCA_database['F'].fillna(0)
+        self.LCA_database['C'] = self.LCA_database['C'].fillna(0)
+
         del lca_database_processed
         del io_database_processed
 
@@ -240,7 +244,7 @@ class DatabaseLoader:
         self.IO_database.calc_all()
         self.X_io = scipy.sparse.csr_matrix(self.IO_database.x.values)
         # exiobase is in million euros, so we divide by 1,000,000
-        self.IO_database.satellite.S.values[9:] /= 1000000
+        self.IO_database.satellite.S[9:] /= 1000000
         self.F_io = scipy.sparse.csr_matrix(self.IO_database.satellite.S)
         del self.IO_database.satellite.S
         del self.IO_database.satellite.F
@@ -262,9 +266,10 @@ class DatabaseLoader:
                 pkg_resources.resource_stream(__name__,
                                               '/Data/characterisationEXIOBASE3_adaptedFromEXIOBASE2.xlsx'),
                 'Q_factor_inputs')], sort=False).fillna(0)
+        self.impact_methods_IO = list(zip(self.C_io.iloc[:, 0], self.C_io.iloc[:, 1], self.C_io.iloc[:, 2],
+                                          self.C_io.iloc[:, 3]))
         # reordering + if there is any flows that weren't characterized put a null CF
         self.C_io = self.C_io.reindex(self.flows_of_IO, axis=1).fillna(0)
-        self.impact_methods_IO = self.C_io.index.tolist()
         self.C_io = scipy.sparse.csr_matrix(self.C_io)
 
         # reference year allows to determine the inflation rate that will need to be applied
@@ -858,11 +863,11 @@ class LCAIO:
                                      pd.MultiIndex.from_product([self.regions_of_IO, self.Y_categories]))
             self.y_io.loc[:, [i for i in self.y_io.columns if i[1] == 'Gross fixed capital formation']] = 0
             self.y_io = back_to_sparse(self.y_io)
-            if len(self.F_io.todense()) == 1104:
-                self.F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO,
+            if self.extended_flows_names:
+                self.F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names,
                                          pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
             else:
-                self.F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names,
+                self.F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO,
                                          pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
             self.F_io.loc['Operating surplus: Consumption of fixed capital', :] = 0
             self.F_io = back_to_sparse(self.F_io)
@@ -1280,16 +1285,16 @@ class LCAIO:
 
         if str(what_is_treated) + ' waste for treatment: ' + str(treatment) in biogenic_sectors:
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, True)
-            if len(self.F_io.todense()) == 1104:
-                list_CO2_extensions = [i for i in self.flows_of_IO if 'CO2' in i and 'biogenic' in i]
-            else:
+            if self.extended_flows_names:
                 list_CO2_extensions = [i for i in self.extended_flows_names if 'CO2' in i and 'biogenic' in i]
+            else:
+                list_CO2_extensions = [i for i in self.flows_of_IO if 'CO2' in i and 'biogenic' in i]
         else:
             dff = self.extract_flow_amounts_biosphere(list_add_on_to_hyb, False)
-            if len(self.F_io.todense()) == 1104:
-                list_CO2_extensions = [i for i in self.flows_of_IO if 'CO2' in i and 'biogenic' not in i]
-            else:
+            if self.extended_flows_names:
                 list_CO2_extensions = [i for i in self.extended_flows_names if 'CO2' in i and 'biogenic' not in i]
+            else:
+                list_CO2_extensions = [i for i in self.flows_of_IO if 'CO2' in i and 'biogenic' not in i]
 
         scaling_vector = self.PRO_f.price.copy()
         scaling_vector.loc[:] = 0
@@ -1381,11 +1386,11 @@ class LCAIO:
                 self.A_io.todense(), self.H.index, self.H.index).groupby('sector', axis=1).sum()
         self.aggregated_A_io = self.aggregated_A_io.groupby('sector', axis=0).sum()
         # identify if environmental flows got extended or not in database_loader()
-        if len(self.F_io.todense()) == 1104:
-            self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO, self.H.index).groupby(
+        if self.extended_flows_names:
+            self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names, self.H.index).groupby(
                 level=1, axis=1).sum()
         else:
-            self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.extended_flows_names, self.H.index).groupby(
+            self.aggregated_F_io = pd.DataFrame(self.F_io.todense(), self.flows_of_IO, self.H.index).groupby(
                 level=1, axis=1).sum()
 
         self.A_ff = pd.DataFrame(self.A_ff.todense(), self.PRO_f.index, self.PRO_f.index)
@@ -1736,6 +1741,11 @@ class Analysis:
             pass
         if 'Impact World+ was used' not in self.description:
             self.IMP = self.hybrid_system['IMP']
+            self.C = pd.concat([pd.DataFrame(self.C_f.todense(), index=self.IMP['method'], columns=self.STR['MATRIXID']),
+                       pd.DataFrame(self.C_io.todense(), index=self.impact_categories_IO,
+                                    columns=self.flows_of_IO)]).fillna(0)
+            self.C_index = self.C.index.tolist()
+            self.C = back_to_sparse(self.C)
         else:
             self.impact_categories_eco = self.hybrid_system['impact_categories_eco']
             if 'Regionalized flows/impacts available' not in self.description:

@@ -1,0 +1,1 @@
+This folder contains all information and support module needed to compile a newer version of hybrid-ecoinvent.
