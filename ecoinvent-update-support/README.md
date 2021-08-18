@@ -1,6 +1,8 @@
-This folder contains all information and support module needed to compile a newer version of hybrid-ecoinvent.
+#### This folder contains all information and support module needed to compile a newer version of hybrid-ecoinvent.
 
-Modifications needed when compiling a newer version:
+Follow the notebook "How to update hybrid-ecoinvent" it will guide you through the needed steps.
+
+###### More information on the modifications needed when compiling a newer version:
 
 - need an eco-x-_exio-y- folder in the src/Data/ folder for the newer version. Note that the code reads the version of 
 ecoinvent declared by the variable entered when creating the object of the class DatabaseLoader so make sure that numbers
