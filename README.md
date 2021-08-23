@@ -2,21 +2,21 @@
 An object class to hybridize lifecycle assessment (LCA) and environmentally extended input-output (EEIO) databases.
 
 
-* Create your own LCA-IO hybrid database (e.g. combining ecoinvent and exiobase data)
+* Create your own LCA-IO hybrid database (e.g., combining ecoinvent and exiobase data)
 * Automates hybridization and correction for double-counting with two available methods (STAM and binary)
-* Default parameters only allow the hybridization of ecoinvent3.5 with EXIOBASE
+* Default parameters only allow the hybridization of ecoinvent3.5, 3.6, 3.7 and 3.7.1 with EXIOBASE3.7+ (v3.7 and higher)
+
+Specific additional features, only available while hybridization ecoinvent3.5 with exiobase
 * Can accept capitals-endogenized version of EXIOBASE
 * Includes extrapolated additional environmental extensions for EXIOBASE (from USEEIO)
 * Includes matching of ecoinvent and EXIOBASE environmental flows to Impact World+
 * Includes regionalized characterization matrices for use with Impact World+
 * Can be exported to brightway2
 
-If you are just interested in the default hybrid database (if you do not want to or cannot run the code) you can find it here: https://zenodo.org/record/3890379
-
 This software is still under development.
 
 # System requirements
-Under 8GM of RAM you will most likely run into a MemorryError, making it impossible to generate a database
+Under 12GM of RAM you will most likely run into a MemoryError, making it impossible to generate a database
 
 # Dependencies
 * Python 3
