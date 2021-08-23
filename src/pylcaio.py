@@ -469,33 +469,27 @@ class DatabaseLoader:
                                                                             '/Data/eco' + str(
                                                                                 version_ecoinvent) + '_exio' + str(
                                                                                 version_exiobase) +
-                                                                            '/STAM_categories.txt').decode(
-            'utf-8'))
+                                                                            '/STAM_categories.txt').decode('utf-8'))
         self.categories_same_functionality = ast.literal_eval(
             pkg_resources.resource_string(
                 __name__,
                 '/Data/eco' + str(version_ecoinvent) + '_exio' + str(
-                    version_exiobase) + '/STAM_functional_categories.txt').decode(
-                'utf-8'))
+                    version_exiobase) + '/STAM_functional_categories.txt').decode('utf-8'))
 
         # GEOGRAPHY CONCORDANCE
 
         self.listcountry = ast.literal_eval(
-            pkg_resources.resource_string(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/countries.txt').decode(
-                'utf-8'))
+            pkg_resources.resource_string(__name__,
+                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/countries.txt').decode('utf-8'))
 
         self.countries_per_regions = ast.literal_eval(
             pkg_resources.resource_string(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
+                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
                 '/countries_per_regions.txt').decode('utf-8'))
 
         self.replacements = ast.literal_eval(
             pkg_resources.resource_string(
-                __name__,
-                '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
+                __name__, '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) +
                 '/geography_replacements.txt').decode('utf-8'))
         self.PRO_f['io_geography'] = [self.replacements[i] if i in self.replacements else i for i in self.PRO_f.geography]
 
