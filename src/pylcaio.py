@@ -1955,10 +1955,10 @@ class Analysis:
         Exporting the hybrid database into brightway2 in a disaggregated format.
 
         :args:  bw2_project_name: (string) the name of the brightway2 project in which the hybrid database will be
-                                           imported. Note that the method creates and deletes an 'ecoinvent3.5 cut-off'
+                                           imported. Note that the method creates and deletes an 'hybrid-ecoinvent'
                                            database. If you use an already-existing project and have a database named
-                                           'ecoinvent3.5 cut-off', it will be overwritten and deleted.
-               path_to_ecoinvent_ecospold_datasets: (string) path to the ecospold files of ecoinvent3.5
+                                           'hybrid-ecoinvent', it will be overwritten and deleted.
+               path_to_ecoinvent_ecospold_datasets: (string) path to the ecospold files of the ecoinvent version used
                aggregated: (boolean) if True Contribution analyses will show the contribution aggregated IO complements
                                              comparatively to ecoinvent inputs. Takes 1h30 to 2h to import.
                                      if False Contribution analyses will show the contribution of each IO complement
@@ -1983,8 +1983,8 @@ class Analysis:
                                                                        'laurepatou-IMPACT-World-in-Brightway-d949b33/'
                                                                        'Brightway_IW_damage_1_46_and_midpoint_1_28.bw2package'))
 
-        # importing ecoinvent3.5 cut-off into the project
-        eco_importer = SingleOutputEcospold2Importer(path_to_ecoinvent_ecospold_datasets, 'ecoinvent3.5 cut-off')
+        # importing hybrid-ecoinvent into the project
+        eco_importer = SingleOutputEcospold2Importer(path_to_ecoinvent_ecospold_datasets, 'hybrid-ecoinvent')
         eco_importer.apply_strategies()
         eco_importer.write_database()
 
@@ -2053,7 +2053,7 @@ class Analysis:
 
     def import_hybrid_ecoinvent_into_brightway2(self, created_database_name, aggregated):
         print('Starting import of hybrid data')
-        db = Database('ecoinvent3.5 cut-off')
+        db = Database('hybrid-ecoinvent')
         ecoinvent_metadata = pd.DataFrame.from_dict(self.PRO_f)
 
         # need to match uuids used in pylcaio to hash codes used by brightway2
@@ -2103,13 +2103,13 @@ class Analysis:
             for process in bw2_eco_dict.keys():
                 bw2_eco_dict[process]['exchanges'].extend(bw2_dict[(created_database_name, process[1])]['exchanges'])
 
-            # exchanges will be associated to the hybrid_ecoinvent_agg database of bw2 and not ecoinvent3.5 cut-off
+            # exchanges will be associated to the hybrid_ecoinvent_agg database of bw2 and not hybrid-ecoinvent
             bw2_hybrid_dict = {(created_database_name, k[1]): v for k, v in bw2_eco_dict.items()}
             bw2_hybrid_dict = {
                 outer_k: {
                     inner_k: [
                         {k: (created_database_name, v[1]) if ((k == 'input' or k == 'output')
-                                                           and v[0] == 'ecoinvent3.5 cut-off')
+                                                           and v[0] == 'hybrid-ecoinvent')
                          else v
                          for k, v in i.items()}
                         for i in bw2_hybrid_dict[outer_k][inner_k]
@@ -2119,8 +2119,8 @@ class Analysis:
                 }
                 for outer_k, outer_v in bw2_hybrid_dict.items()
             }
-            print('Deleting ecoinvent3.5 cut-off database')
-            del databases['ecoinvent3.5 cut-off']
+            print('Deleting hybrid-ecoinvent database')
+            del databases['hybrid-ecoinvent']
             print('Writing {} database'.format(created_database_name))
             Database(created_database_name).write(bw2_hybrid_dict)
             print('{} successfully imported'.format(created_database_name))
@@ -2158,13 +2158,13 @@ class Analysis:
                      bw2_dict[(created_database_name, hash_code)]['exchanges'].items()}.values())
             print('Matching ecoinvent data with hybrid data')
             # to link ecoinvent exchanges to exiobase exchanges, we need the original ecoinvent to also be in a dict format
-            bw2_eco_dict = Database('ecoinvent3.5 cut-off').load()
+            bw2_eco_dict = Database('hybrid-ecoinvent').load()
 
             # add IO complements to each ecoinvent process
             for process in bw2_eco_dict.keys():
                 bw2_eco_dict[process]['exchanges'].extend(bw2_dict[(created_database_name, process[1])]['exchanges'])
 
-            # exchanges will be associated to the hybrid_ecoinvent database of bw2 and not ecoinvent3.5 cut-off
+            # exchanges will be associated to the hybrid_ecoinvent database of bw2 and not hybrid-ecoinvent
             bw2_hybrid_dict = {(created_database_name, k[1]): v for k, v in bw2_eco_dict.items()}
 
             # we also need to replace the database name in the inputs. It's a bit trickier:
@@ -2172,7 +2172,7 @@ class Analysis:
                 outer_k: {
                     inner_k: [
                         {k: (created_database_name, v[1]) if ((k == 'input' or k == 'output')
-                                                           and v[0] == 'ecoinvent3.5 cut-off')
+                                                           and v[0] == 'hybrid-ecoinvent')
                          else v
                          for k, v in i.items()}
                         for i in bw2_hybrid_dict[outer_k][inner_k]
@@ -2182,9 +2182,9 @@ class Analysis:
                 }
                 for outer_k, outer_v in bw2_hybrid_dict.items()
             }
-            print('Deleting ecoinvent3.5 cut-off database')
-            # we remove the 'ecoinvent3.5 cut-off' database. Its taking unnecessary space.
-            del databases['ecoinvent3.5 cut-off']
+            print('Deleting hybrid-ecoinvent database')
+            # we remove the 'hybrid-ecoinvent' database. Its taking unnecessary space.
+            del databases['hybrid-ecoinvent']
             print('Writing {} database'.format(created_database_name))
             # write the formatted dictionary in the brightway2 database
             Database(created_database_name).write(bw2_hybrid_dict)

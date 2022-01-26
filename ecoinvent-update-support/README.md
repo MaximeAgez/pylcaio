@@ -1,6 +1,8 @@
 #### This folder contains all information and support module needed to compile a newer version of hybrid-ecoinvent.
 
-Follow the notebook "How to update hybrid-ecoinvent" it will guide you through the needed steps.
+Only run the code in this folder if you are looking to produce necessary information for unsupported hybrid-ecoinvent version. If the latest version of ecoinvent is already supported by pylcaio, you do not have to execute anything in this folder. You can directly go to the doc/ folder which will show you how to use pylcaio.
+
+If you do need to produce information for unspported versions, follow the notebook "How to update hybrid-ecoinvent". It will guide you through the needed steps.
 
 ###### More information on the modifications needed when compiling a newer version:
 
