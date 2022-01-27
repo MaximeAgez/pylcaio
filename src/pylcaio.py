@@ -169,12 +169,13 @@ class DatabaseLoader:
         del lca_database_processed
         del io_database_processed
 
-        # TODO custom errors would be cooler
-        versions_of_ecoinvent = ['ecoinvent3.7.1', 'ecoinvent3.6', 'ecoinvent3.5', 'ecoinvent3.3']
+        versions_of_ecoinvent = ['ecoinvent3.8', 'ecoinvent3.7.1', 'ecoinvent3.6', 'ecoinvent3.5']
         if self.lca_database_name_and_version not in versions_of_ecoinvent:
-            print('The LCA database version you entered is not supported currently')
+            raise ValueError('The ecoinvent version you entered is not supported currently. Supported versions are: '
+                             'ecoinvent3.8, ecoinvent3.7.1, ecoinvent3.6 and ecoinvent3.5.')
         if self.io_database_name_and_version.split('exiobase')[1][0] != '3':
-            print('The IO database version you entered is not supported currently')
+            raise ValueError('The exiobase version you entered is not supported currently. Pylcaio only supports '
+                             'exiobase3')
 
     def combine_ecoinvent_exiobase(self, path_to_capitals='', complete_extensions=False,
                                    impact_world=False, regionalized=False):
