@@ -280,170 +280,178 @@ class DatabaseLoader:
         # OPTIONAL FEATURES - MORE ENVIRONMENTAL EXTENSIONS
 
         if complete_extensions:
-            new_extensions = scipy.sparse.load_npz(pkg_resources.resource_filename(__name__,
-                                                                                 '/Data/Completed_extensions_exio3/'
-                                                                                 'S_completed.npz'))
-            new_flows_names = eval(open(pkg_resources.resource_filename(
-                __name__, '/Data/Completed_extensions_exio3/extension_names.txt'), 'r').read())
-
-            extended_extensions = completing_extensions(pd.DataFrame(self.F_io.todense(),
-                                                                        index=self.flows_of_IO,
-                                                                        columns=pd.MultiIndex.from_product([
-                                                                              self.regions_of_IO,
-                                                                              self.sectors_of_IO],
-                                                                              names=['region', 'sector'])),
-                                                        pd.DataFrame(new_extensions.todense(),
-                                                                        index=new_flows_names,
-                                                                        columns=pd.MultiIndex.from_product([
-                                                                            self.regions_of_IO,
-                                                                            self.sectors_of_IO],
-                                                                            names=['region', 'sector'])))
-            self.extended_flows_names = extended_extensions.index.tolist()
-            self.F_io = back_to_sparse(extended_extensions)
-
-            self.description.append('Environmental extensions were completed')
-
-            if not impact_world:
-                self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(__name__, '/Data/'
-                                                                                 'Completed_extensions_exio3/'
-                                                                                 'C_completed_in_CML.npz'))
-                self.extended_impact_names_CML = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Completed_extensions_exio3/name_impact_extended_CML.txt'), 'r').read())
-                self.description.append('Classic impact categories were used')
+            if version_ecoinvent != '3.5':
+                raise ValueError("Completed extensions are only available for the hybridization of the 3.5 version "
+                                 "of ecoinvent")
             else:
-                self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Exiobase_not_regionalized.npz'))
-                self.extended_impact_names_IW_exio = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/completed_extensions/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
-                self.C_f = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Ecoinvent_not_regionalized.npz'))
-                self.extended_impact_names_IW_eco = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/completed_extensions/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
-                self.description.append('Impact World+ was used')
+                new_extensions = scipy.sparse.load_npz(pkg_resources.resource_filename(__name__,
+                                                                                     '/Data/Completed_extensions_exio3/'
+                                                                                     'S_completed.npz'))
+                new_flows_names = eval(open(pkg_resources.resource_filename(
+                    __name__, '/Data/Completed_extensions_exio3/extension_names.txt'), 'r').read())
+
+                extended_extensions = completing_extensions(pd.DataFrame(self.F_io.todense(),
+                                                                            index=self.flows_of_IO,
+                                                                            columns=pd.MultiIndex.from_product([
+                                                                                  self.regions_of_IO,
+                                                                                  self.sectors_of_IO],
+                                                                                  names=['region', 'sector'])),
+                                                            pd.DataFrame(new_extensions.todense(),
+                                                                            index=new_flows_names,
+                                                                            columns=pd.MultiIndex.from_product([
+                                                                                self.regions_of_IO,
+                                                                                self.sectors_of_IO],
+                                                                                names=['region', 'sector'])))
+                self.extended_flows_names = extended_extensions.index.tolist()
+                self.F_io = back_to_sparse(extended_extensions)
+
+                self.description.append('Environmental extensions were completed')
+
+                if not impact_world:
+                    self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(__name__, '/Data/'
+                                                                                     'Completed_extensions_exio3/'
+                                                                                     'C_completed_in_CML.npz'))
+                    self.extended_impact_names_CML = eval(open(pkg_resources.resource_filename(
+                        __name__, '/Data/Completed_extensions_exio3/name_impact_extended_CML.txt'), 'r').read())
+                    self.description.append('Classic impact categories were used')
+                else:
+                    self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/Exiobase_not_regionalized.npz'))
+                    self.extended_impact_names_IW_exio = eval(open(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
+                    self.C_f = scipy.sparse.load_npz(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/Ecoinvent_not_regionalized.npz'))
+                    self.extended_impact_names_IW_eco = eval(open(pkg_resources.resource_filename(
+                        __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
+                    self.description.append('Impact World+ was used')
 
         else:
             self.description.append('Environmental extensions were not completed')
             if impact_world:
                 self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Exiobase_not_regionalized.npz'))
+                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/Exiobase_not_regionalized.npz'))
                 self.extended_impact_names_IW_exio = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/normal_extensions/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
+                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
                 self.C_f = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Ecoinvent_not_regionalized.npz'))
+                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/Ecoinvent_not_regionalized.npz'))
                 self.extended_impact_names_IW_eco = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/normal_extensions/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
+                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/not_regionalized_IW+_ecoinvent.txt'), 'r').read())
                 self.description.append('Impact World+ was used')
                 self.F_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Exiobase_not_regionalized_F.npz'))
+                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/Exiobase_not_regionalized_F.npz'))
                 self.extended_flows_names = eval(open(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/normal_extensions/normal_flows_names.txt'), 'r').read())
+                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/normal_flows_names.txt'), 'r').read())
             else:
                 self.description.append('Classic impact categories were used')
 
         # OPTIONAL FEATURES - REGIONALIZATION OF IMPACTS
 
         if regionalized:
-            if not impact_world:
-                print('Only the impact world+ method supports regionalization. '
-                      'Please pass the corresponding argument as True if you wish to regionalize')
+            if version_ecoinvent != '3.5':
+                raise ValueError("Regionalization is only available for the hybridization of the 3.5 version "
+                                 "of ecoinvent")
             else:
-                self.description.append('Regionalized flows/impacts available')
-                if complete_extensions:
-                    # load regionalized characterization matrices
-                    self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
-                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Exiobase_regionalized.npz'))
-                    self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_exiobase.txt'), 'r').read())
-                    self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_exiobase_flows.txt'), 'r').read())
-                    self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
-                        __name__, '/Data/Characterization_matrix_IW+/completed_extensions/Ecoinvent_regionalized.npz'))
-                    self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_ecoinvent.txt'), 'r').read())
-                    self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/completed_extensions/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
+                if not impact_world:
+                    print('Only the impact world+ method supports regionalization. '
+                          'Please pass the corresponding argument as True if you wish to regionalize')
                 else:
-                    # load regionalized characterization matrices
-                    self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
-                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Exiobase_regionalized.npz'))
-                    self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_exiobase.txt'), 'r').read())
-                    self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_exiobase_flows.txt'), 'r').read())
-                    self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
-                        __name__, '/Data/Characterization_matrix_IW+/normal_extensions/Ecoinvent_regionalized.npz'))
-                    self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_ecoinvent.txt'), 'r').read())
-                    self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
-                            __name__, '/Data/Characterization_matrix_IW+/normal_extensions/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
-                # manufacture regionalized environmental extensions matrix (EXIOBASE)
-                F_io = pd.DataFrame(self.F_io.todense(),
-                                    self.extended_flows_names,
-                                    pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO],
-                                                               names=['region', 'sector']))
-                regionalizable_flows = []
-                for flow in self.regionalized_flow_names_exio:
-                    if flow[0] not in regionalizable_flows:
-                        regionalizable_flows.append(flow[0])
-                self.F_io_regio = pd.concat([F_io.loc[regionalizable_flows]] * 49)
-                self.F_io_regio.index = pd.MultiIndex.from_product([self.regions_of_IO, regionalizable_flows])
-                self.F_io_regio = self.F_io_regio.swaplevel()
-                F_io_regio_dict = self.F_io_regio.to_dict()
+                    self.description.append('Regionalized flows/impacts available')
+                    if complete_extensions:
+                        # load regionalized characterization matrices
+                        self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                            __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/Exiobase_regionalized.npz'))
+                        self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/regionalized_IW+_exiobase.txt'), 'r').read())
+                        self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/regionalized_IW+_exiobase_flows.txt'), 'r').read())
+                        self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                            __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/Ecoinvent_regionalized.npz'))
+                        self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/regionalized_IW+_ecoinvent.txt'), 'r').read())
+                        self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/completed_extensions/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
+                    else:
+                        # load regionalized characterization matrices
+                        self.C_io_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                            __name__, '/Data/Characterization_matrix_IW+/eco3.5/normal_extensions/Exiobase_regionalized.npz'))
+                        self.regionalized_impact_names_exio = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/normal_extensions/regionalized_IW+_exiobase.txt'), 'r').read())
+                        self.regionalized_flow_names_exio = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/normal_extensions/regionalized_IW+_exiobase_flows.txt'), 'r').read())
+                        self.C_f_regio = scipy.sparse.load_npz(pkg_resources.resource_stream(
+                            __name__, '/Data/Characterization_matrix_IW+/eco3.5/normal_extensions/Ecoinvent_regionalized.npz'))
+                        self.regionalized_impact_names_eco = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/normal_extensions/regionalized_IW+_ecoinvent.txt'), 'r').read())
+                        self.regionalized_flow_names_eco = eval(open(pkg_resources.resource_filename(
+                                __name__, '/Data/Characterization_matrix_IW+/eco3.5/normal_extensions/regionalized_IW+_ecoinvent_flows.txt'), 'r').read())
+                    # manufacture regionalized environmental extensions matrix (EXIOBASE)
+                    F_io = pd.DataFrame(self.F_io.todense(),
+                                        self.extended_flows_names,
+                                        pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO],
+                                                                   names=['region', 'sector']))
+                    regionalizable_flows = []
+                    for flow in self.regionalized_flow_names_exio:
+                        if flow[0] not in regionalizable_flows:
+                            regionalizable_flows.append(flow[0])
+                    self.F_io_regio = pd.concat([F_io.loc[regionalizable_flows]] * 49)
+                    self.F_io_regio.index = pd.MultiIndex.from_product([self.regions_of_IO, regionalizable_flows])
+                    self.F_io_regio = self.F_io_regio.swaplevel()
+                    F_io_regio_dict = self.F_io_regio.to_dict()
 
-                for sector in F_io_regio_dict:
-                    for flow in F_io_regio_dict[sector].keys():
-                        if flow[1] != sector[0]:
-                            F_io_regio_dict[sector][flow] = 0
+                    for sector in F_io_regio_dict:
+                        for flow in F_io_regio_dict[sector].keys():
+                            if flow[1] != sector[0]:
+                                F_io_regio_dict[sector][flow] = 0
 
-                self.F_io_regio = pd.DataFrame.from_dict(F_io_regio_dict)
-                self.F_io_regio = self.F_io_regio.reindex(self.regionalized_flow_names_exio)
-                self.F_io_regio = back_to_sparse(self.F_io_regio)
-                del F_io
-                # manufacture environmental flows matrix (ecoinvent)
-                F = pd.DataFrame(self.F_f.todense(), self.STR_f.index, self.PRO_f.index)
-                geography_for_IW = dict(zip(self.PRO_f.index,
-                                            [i.split('-')[0].replace('Canada without Quebec', 'CA') for i in
-                                             self.PRO_f.geography]))
-                df_to_pivot = pd.DataFrame()
-                for process in F.columns:
-                    regionalizable_flows = [i for i in F.loc[:, process][F.loc[:, process] != 0].index if
-                                            i in list(set([i[0] for i in self.regionalized_flow_names_eco]))]
-                    for flow in F.loc[regionalizable_flows, process].index:
-                        df_to_pivot = pd.concat([df_to_pivot,
-                                                 pd.DataFrame([process,
-                                                               geography_for_IW[process],
-                                                               flow,
-                                                               F.loc[regionalizable_flows, process][flow]],
-                                                              index=['process', 'geography', 'flow', 'value']).T],
-                                                sort=False)
+                    self.F_io_regio = pd.DataFrame.from_dict(F_io_regio_dict)
+                    self.F_io_regio = self.F_io_regio.reindex(self.regionalized_flow_names_exio)
+                    self.F_io_regio = back_to_sparse(self.F_io_regio)
+                    del F_io
+                    # manufacture environmental flows matrix (ecoinvent)
+                    F = pd.DataFrame(self.F_f.todense(), self.STR_f.index, self.PRO_f.index)
+                    geography_for_IW = dict(zip(self.PRO_f.index,
+                                                [i.split('-')[0].replace('Canada without Quebec', 'CA') for i in
+                                                 self.PRO_f.geography]))
+                    df_to_pivot = pd.DataFrame()
+                    for process in F.columns:
+                        regionalizable_flows = [i for i in F.loc[:, process][F.loc[:, process] != 0].index if
+                                                i in list(set([i[0] for i in self.regionalized_flow_names_eco]))]
+                        for flow in F.loc[regionalizable_flows, process].index:
+                            df_to_pivot = pd.concat([df_to_pivot,
+                                                     pd.DataFrame([process,
+                                                                   geography_for_IW[process],
+                                                                   flow,
+                                                                   F.loc[regionalizable_flows, process][flow]],
+                                                                  index=['process', 'geography', 'flow', 'value']).T],
+                                                    sort=False)
 
-                self.F_f_regio = pd.pivot_table(df_to_pivot, index=['flow', 'geography'], columns='process',
-                                                values='value', aggfunc=sum)
-                self.F_f_regio = self.F_f_regio.fillna(0)
-                self.F_f_regio = pd.concat(
-                    [pd.DataFrame(0, self.F_f_regio.index,
-                                  [i for i in self.PRO_f.index if i not in self.F_f_regio.columns]),
-                     self.F_f_regio], axis=1).reindex(self.PRO_f.index, axis=1)
-                self.F_f_regio = back_to_sparse(self.F_f_regio)
-                del F
-                # remove regionalized characterization from standard characterization matrices
-                self.C_f = pd.DataFrame(self.C_f.todense(), self.extended_impact_names_IW_eco, self.STR_f.MATRIXID)
-                regionalized_flows = set([i[0] for i in self.regionalized_flow_names_eco])
-                for category in self.regionalized_impact_names_eco:
-                    # identify flows that have an impact for the given category
-                    impacting_flows = self.C_f.loc[category][self.C_f.loc[category] != 0].index.tolist()
-                    # if they are characterized with the regionalized matrix, set them to zero
-                    self.C_f.loc[
-                        category, [i for i in impacting_flows if i in regionalized_flows]] = 0
-                self.C_f = back_to_sparse(self.C_f)
-                self.C_io = pd.DataFrame(self.C_io.todense(), self.extended_impact_names_IW_exio,
-                                         self.extended_flows_names)
-                for category in self.regionalized_impact_names_exio:
-                    impacting_flows = self.C_io.loc[category][
-                        self.C_io.loc[category] != 0].index.tolist()
-                    self.C_io.loc[category, [i for i in impacting_flows if i in set(
-                        [i[0] for i in self.regionalized_flow_names_exio])]] = 0
-                self.C_io = back_to_sparse(self.C_io)
+                    self.F_f_regio = pd.pivot_table(df_to_pivot, index=['flow', 'geography'], columns='process',
+                                                    values='value', aggfunc=sum)
+                    self.F_f_regio = self.F_f_regio.fillna(0)
+                    self.F_f_regio = pd.concat(
+                        [pd.DataFrame(0, self.F_f_regio.index,
+                                      [i for i in self.PRO_f.index if i not in self.F_f_regio.columns]),
+                         self.F_f_regio], axis=1).reindex(self.PRO_f.index, axis=1)
+                    self.F_f_regio = back_to_sparse(self.F_f_regio)
+                    del F
+                    # remove regionalized characterization from standard characterization matrices
+                    self.C_f = pd.DataFrame(self.C_f.todense(), self.extended_impact_names_IW_eco, self.STR_f.MATRIXID)
+                    regionalized_flows = set([i[0] for i in self.regionalized_flow_names_eco])
+                    for category in self.regionalized_impact_names_eco:
+                        # identify flows that have an impact for the given category
+                        impacting_flows = self.C_f.loc[category][self.C_f.loc[category] != 0].index.tolist()
+                        # if they are characterized with the regionalized matrix, set them to zero
+                        self.C_f.loc[
+                            category, [i for i in impacting_flows if i in regionalized_flows]] = 0
+                    self.C_f = back_to_sparse(self.C_f)
+                    self.C_io = pd.DataFrame(self.C_io.todense(), self.extended_impact_names_IW_exio,
+                                             self.extended_flows_names)
+                    for category in self.regionalized_impact_names_exio:
+                        impacting_flows = self.C_io.loc[category][
+                            self.C_io.loc[category] != 0].index.tolist()
+                        self.C_io.loc[category, [i for i in impacting_flows if i in set(
+                            [i[0] for i in self.regionalized_flow_names_exio])]] = 0
+                    self.C_io = back_to_sparse(self.C_io)
         else:
             self.description.append('Regionalized flows/impacts unavailable')
 
@@ -454,12 +462,16 @@ class DatabaseLoader:
             Kbar = None
             inv_diag_x = None
         else:
-            Kbar = scipy.io.loadmat(path_to_capitals)['KbarCfc']
-            warnings.filterwarnings("ignore", "divide by zero encountered in true_divide")
-            inv_diag_x = 1 / self.IO_database.x.values
-            inv_diag_x[inv_diag_x == np.inf] = 0
-            inv_diag_x = np.diagflat(inv_diag_x)
-            self.K_io = Kbar.dot(scipy.sparse.csr_matrix(inv_diag_x))
+            if version_ecoinvent != '3.5':
+                raise ValueError("Capital endogenization is only available for the hybridization of the 3.5 version "
+                                 "of ecoinvent")
+            else:
+                Kbar = scipy.io.loadmat(path_to_capitals)['KbarCfc']
+                warnings.filterwarnings("ignore", "divide by zero encountered in true_divide")
+                inv_diag_x = 1 / self.IO_database.x.values
+                inv_diag_x[inv_diag_x == np.inf] = 0
+                inv_diag_x = np.diagflat(inv_diag_x)
+                self.K_io = Kbar.dot(scipy.sparse.csr_matrix(inv_diag_x))
 
         del self.LCA_database
         del self.IO_database
@@ -1732,9 +1744,14 @@ class Analysis:
             pass
         if 'Impact World+ was used' not in self.description:
             self.IMP = self.hybrid_system['IMP']
-            self.C = pd.concat([pd.DataFrame(self.C_f.todense(), index=self.IMP['method'], columns=self.STR['MATRIXID']),
-                       pd.DataFrame(self.C_io.todense(), index=self.impact_categories_IO,
-                                    columns=self.flows_of_IO)]).fillna(0)
+            try :
+                self.C = pd.concat([pd.DataFrame(self.C_f.todense(), index=self.IMP['method'], columns=self.STR['MATRIXID']),
+                           pd.DataFrame(self.C_io.todense(), index=self.impact_categories_IO,
+                                        columns=self.flows_of_IO)]).fillna(0)
+            except KeyError:
+                self.C = pd.concat([pd.DataFrame(self.C_f.todense(), index=self.IMP['Method'], columns=self.STR['MATRIXID']),
+                           pd.DataFrame(self.C_io.todense(), index=self.impact_categories_IO,
+                                        columns=self.flows_of_IO)]).fillna(0)
             self.C_index = self.C.index.tolist()
             self.C = back_to_sparse(self.C)
         else:
