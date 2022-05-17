@@ -238,8 +238,8 @@ class DatabaseLoader:
         self.number_of_RoW_IO = 5
         self.number_of_countries_IO = len([i for i in self.IO_database.get_regions()]) - self.number_of_RoW_IO
 
-        # cleaning up exiobase sector names
-        self.sectors_of_IO = [i.split(' (')[0] if re.findall(r'\d', i) else i for i in self.sectors_of_IO]
+        # cleaning up exiobase sector namescd desk  
+        self.sectors_of_IO = [re.sub(r' \(\d\d\)', '', i) for i in lcaio_object.sectors_of_IO]
         # extracting calculated matrices from exiobase (X, L, etc.)
         self.IO_database.calc_all()
         self.X_io = scipy.sparse.csr_matrix(self.IO_database.x.values)
@@ -521,8 +521,8 @@ class DatabaseLoader:
             '/Data/eco' + str(version_ecoinvent) + '_exio' + str(version_exiobase) + '/Product_Concordances.xlsx'),
             'Description_Exiobase')
 
-        concordance_activity = concordance_activity.drop('activityName', 1)
-        concordance_product = concordance_product.drop('productName', 1)
+        concordance_activity = concordance_activity.drop('activityName', axis=1)
+        concordance_product = concordance_product.drop('productName', axis=1)
         self.PRO_f = self.PRO_f.merge(concordance_product, 'outer')
         self.PRO_f = self.PRO_f.merge(concordance_activity, how='left', on='activityNameId')
         list_concordance = []
