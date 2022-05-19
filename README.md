@@ -6,12 +6,12 @@ An object class to hybridize lifecycle assessment (LCA) and environmentally exte
 * Automates hybridization and correction for double-counting with two available methods (STAM and binary)
 * Default parameters only allow the hybridization of ecoinvent 3.5, 3.6, 3.7, 3.7.1 and 3.8 with EXIOBASE3.7+ (v3.7 and higher)
 * The resulting hybrid-ecoinvent database can be exported to brightway2 and the GUI activity-browser
+* Includes matching of ecoinvent and EXIOBASE environmental flows to Impact World+
 
 Specific additional features, _**only available**_ while hybridization ecoinvent3.5 with exiobase
 * Can accept capitals-endogenized version of EXIOBASE
 * Includes extrapolated additional environmental extensions for EXIOBASE (from USEEIO)
-* Includes matching of ecoinvent and EXIOBASE environmental flows to Impact World+
-* Includes regionalized characterization matrices for use with Impact World+
+* Includes _**regionalized**_ characterization matrices for use with Impact World+
 
 This library will be regularly updated to provide support for newer versions of ecoinvent.
 
