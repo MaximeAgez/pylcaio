@@ -239,7 +239,7 @@ class DatabaseLoader:
         self.number_of_countries_IO = len([i for i in self.IO_database.get_regions()]) - self.number_of_RoW_IO
 
         # cleaning up exiobase sector names
-        self.sectors_of_IO = [re.sub(r' \(\d\d\)', '', i) for i in lcaio_object.sectors_of_IO]
+        self.sectors_of_IO = [re.sub(r' \(\d\d\)', '', i) for i in self.sectors_of_IO]
         # extracting calculated matrices from exiobase (X, L, etc.)
         self.IO_database.calc_all()
         self.X_io = scipy.sparse.csr_matrix(self.IO_database.x.values)
