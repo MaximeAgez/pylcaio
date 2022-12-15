@@ -4,7 +4,7 @@ An object class to hybridize lifecycle assessment (LCA) and environmentally exte
 
 * Create your own LCA-IO hybrid database (e.g., combining ecoinvent and exiobase data)
 * Automates hybridization and correction for double-counting with two available methods (STAM and binary)
-* Default parameters only allow the hybridization of ecoinvent 3.5, 3.6, 3.7, 3.7.1 and 3.8 with EXIOBASE3.7+ (v3.7 and higher)
+* Default parameters only allow the hybridization of ecoinvent 3.5, 3.6, 3.7, 3.7.1, 3.8 and 3.9 with EXIOBASE3.7+ (v3.7 and higher)
 * The resulting hybrid-ecoinvent database can be exported to brightway2 and the GUI activity-browser
 * Includes matching of ecoinvent and EXIOBASE environmental flows to Impact World+
 

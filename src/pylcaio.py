@@ -169,7 +169,7 @@ class DatabaseLoader:
         del lca_database_processed
         del io_database_processed
 
-        versions_of_ecoinvent = ['ecoinvent3.8', 'ecoinvent3.7.1', 'ecoinvent3.6', 'ecoinvent3.5']
+        versions_of_ecoinvent = ['ecoinvent3.9', 'ecoinvent3.8', 'ecoinvent3.7.1', 'ecoinvent3.6', 'ecoinvent3.5']
         if self.lca_database_name_and_version not in versions_of_ecoinvent:
             raise ValueError('The ecoinvent version you entered is not supported currently. Supported versions are: '
                              'ecoinvent3.8, ecoinvent3.7.1, ecoinvent3.6 and ecoinvent3.5.')
@@ -523,7 +523,7 @@ class DatabaseLoader:
 
         concordance_activity = concordance_activity.drop('activityName', axis=1)
         concordance_product = concordance_product.drop('productName', axis=1)
-        self.PRO_f = self.PRO_f.merge(concordance_product, 'outer')
+        self.PRO_f = self.PRO_f.merge(concordance_product, how='left')
         self.PRO_f = self.PRO_f.merge(concordance_activity, how='left', on='activityNameId')
         list_concordance = []
         for index in self.PRO_f.index:
