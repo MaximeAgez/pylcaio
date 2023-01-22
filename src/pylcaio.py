@@ -172,7 +172,7 @@ class DatabaseLoader:
         versions_of_ecoinvent = ['ecoinvent3.9', 'ecoinvent3.8', 'ecoinvent3.7.1', 'ecoinvent3.6', 'ecoinvent3.5']
         if self.lca_database_name_and_version not in versions_of_ecoinvent:
             raise ValueError('The ecoinvent version you entered is not supported currently. Supported versions are: '
-                             'ecoinvent3.8, ecoinvent3.7.1, ecoinvent3.6 and ecoinvent3.5.')
+                             'ecoinvent3.9, ecoinvent3.8, ecoinvent3.7.1, ecoinvent3.6 and ecoinvent3.5.')
         if self.io_database_name_and_version.split('exiobase')[1][0] != '3':
             raise ValueError('The exiobase version you entered is not supported currently. Pylcaio only supports '
                              'exiobase3')
@@ -2020,8 +2020,11 @@ class Analysis:
         # calculating aggregated results for exiobase
         self.Lio = scipy.sparse.csr_matrix(
             np.linalg.solve(np.eye(self.A_io.shape[0]) - self.A_io.todense(), np.eye(self.A_io.shape[0])))
-        aggregated_results = pd.DataFrame((self.C_io.dot(self.F_io).dot(self.Lio)).todense(), self.impact_categories_IO,
-                                          pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO]))
+        aggregated_results = pd.DataFrame(
+            (self.C_io.dot(self.F_io).dot(self.Lio)).todense(),
+            self.impact_categories_IO,
+            pd.MultiIndex.from_product([self.regions_of_IO, self.sectors_of_IO])
+        )
         print('Formating data')
         # create hash codes for exiobase sectors
         give_hash_to_exio = dict.fromkeys(aggregated_results.columns)
@@ -2032,26 +2035,44 @@ class Analysis:
         IW_pylcaio_to_bw2 = dict.fromkeys(self.impact_categories_IO)
         for IW_category in IW_pylcaio_to_bw2:
             if 'PDF' in IW_category or 'DALY' in IW_category:
-                IW_pylcaio_to_bw2[IW_category] = \
-                methods.get(('IMPACTWorld+ (Default_Recommended_Damage 1.46)', IW_category.split(' (')[0]))[
-                    'abbreviation']
+                m_key = ('IMPACTWorld+ (Default_Recommended_Damage 1.46)', IW_category.split(' (')[0], )
+                if methods.get(m_key) is not None:
+                    IW_pylcaio_to_bw2[IW_category] = methods.get(
+                        m_key,
+                        {}
+                    ).get('abbreviation')
+                else:
+                    m_key = (m_key[0], m_key[1].title(), )
+                    IW_pylcaio_to_bw2[IW_category] = methods.get(
+                        m_key,
+                        {}
+                    ).get('abbreviation')
             else:
-                IW_pylcaio_to_bw2[IW_category] = \
-                methods.get(('IMPACTWorld+ (Default_Recommended_Midpoint 1.28)', IW_category.split(' (')[0]))[
-                    'abbreviation']
+                m_key = ('IMPACTWorld+ (Default_Recommended_Midpoint 1.28)', IW_category.split(' (')[0], )
+                if methods.get(m_key) is not None:
+                    IW_pylcaio_to_bw2[IW_category] = methods.get(
+                        m_key,
+                        {}
+                    ).get('abbreviation')
+                else:
+                    m_key = (m_key[0], m_key[1].title(), )
+                    IW_pylcaio_to_bw2[IW_category] = methods.get(
+                        m_key,
+                        {}
+                    ).get('abbreviation')
+
+        #IW_pylcaio_to_bw2 = {k: v for k, v in IW_pylcaio_to_bw2.items() if v is not None}
+
         aggregated_results.index = list(IW_pylcaio_to_bw2.values())
 
         # create dummy exchanges and characterization factors to enable the storing of LCIA scores into exchanges
         add_all_unit_score_exchanges_and_cfs()
 
         # formatting exiobase data
-        bw2_dict = dict.fromkeys(list(zip(['exiobase'] * len(aggregated_results.columns), aggregated_results.columns)),
-                                 {
-                                     'name': '',
-                                     'unit': '',
-                                     'location': '',
-                                     'exchanges': [],
-                                 })
+        bw2_dict = dict.fromkeys(
+            list(zip(['exiobase'] * len(aggregated_results.columns), aggregated_results.columns)),
+            {'name': '', 'unit': '', 'location': '', 'exchanges': []}
+        )
 
         for sector_hash in aggregated_results.columns:
             bw2_dict[('exiobase', sector_hash)] = {
@@ -2062,8 +2083,11 @@ class Analysis:
                     aggregated_results.loc[:, sector_hash] != 0].to_dict()}
         for sector_hash in aggregated_results.columns:
             bw2_dict[('exiobase', sector_hash)]['exchanges'] = list(
-                {k: {'input': ('biosphere3', k), 'amount': v, 'type': 'biosphere'} for k, v in
-                 bw2_dict[('exiobase', sector_hash)]['exchanges'].items()}.values())
+                {
+                    k: {'input': ('biosphere3', k), 'amount': v, 'type': 'biosphere'} for k, v in
+                    bw2_dict[('exiobase', sector_hash)]['exchanges'].items() if k is not None
+                }.values()
+            )
         print('Writing exiobase database')
         # importing the aggregated exiobase into the project
         Database('exiobase').write(bw2_dict)
