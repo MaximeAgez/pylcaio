@@ -182,13 +182,10 @@ class DatabaseLoader:
         """ Loads every needed parameter to hybridize ecoinvent with exiobase as well as both databases
         Args:
         ----
-            * path_to_capitals      : the path leading to the capitals new matrix (only required if wanting to
-                                      endogenize capitals) only available for EXIOBASE3
-            * complete_extensions   : boolean (True to complete exiobase3 extensions based on USEEIO extension)
-                                      only available for EXIOBASE3
+            * path_to_capitals      : the path leading to the capitals new matrix (only required if wanting to endogenize capitals)
+            * complete_extensions   : boolean (True to complete exiobase3 extensions based on USEEIO extension) only available for EXIOBASE3 and ecoinvent3.5
             * impact_world          : boolean (True to use Impact world + method, False to get classic methods)
-                                      only available for EXIOBASE3 and ecoinvent3.5
-            * regionalized          : boolean (True to use regionalized impacts) / only available for EXIOBASE3 and ecoinvent3.5
+            * regionalized          : boolean (True to use regionalized impacts) only available for EXIOBASE3 and ecoinvent3.5
                                       available regionalized impacts are (if marked by *, only available for ecoinvent):
                                       - Terrestrial acidification
                                       - Freshwater eutrophication
@@ -328,8 +325,12 @@ class DatabaseLoader:
         else:
             self.description.append('Environmental extensions were not completed')
             if impact_world:
-                self.C_io = scipy.sparse.load_npz(pkg_resources.resource_filename(
-                    __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/Exiobase_not_regionalized.npz'))
+                self.C_io = scipy.sparse.load_npz(
+                    pkg_resources.resource_filename(
+                        __name__,
+                        '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/Exiobase_not_regionalized.npz'
+                    )
+                )
                 self.extended_impact_names_IW_exio = eval(open(pkg_resources.resource_filename(
                     __name__, '/Data/Characterization_matrix_IW+/eco'+version_ecoinvent+'/not_regionalized_IW+_EXIOBASE.txt'), 'r').read())
                 self.C_f = scipy.sparse.load_npz(pkg_resources.resource_filename(
@@ -2061,8 +2062,6 @@ class Analysis:
                         {}
                     ).get('abbreviation')
 
-        #IW_pylcaio_to_bw2 = {k: v for k, v in IW_pylcaio_to_bw2.items() if v is not None}
-
         aggregated_results.index = list(IW_pylcaio_to_bw2.values())
 
         # create dummy exchanges and characterization factors to enable the storing of LCIA scores into exchanges
@@ -2107,17 +2106,38 @@ class Analysis:
             print('Aggregating data')
             aggregated_results = self.aggregate_hybrid_ecoinvent()
             print('Formating hybrid data')
+
             # match LCIA methods
             IW_pylcaio_to_bw2 = dict.fromkeys(aggregated_results.index)
+
             for IW_category in IW_pylcaio_to_bw2:
                 if 'PDF' in IW_category or 'DALY' in IW_category:
-                    IW_pylcaio_to_bw2[IW_category] = \
-                    methods.get(('IMPACTWorld+ (Default_Recommended_Damage 1.46)', IW_category.split(' (')[0]))[
-                        'abbreviation']
+                    m_key = ('IMPACTWorld+ (Default_Recommended_Damage 1.46)', IW_category.split(' (')[0],)
+                    if methods.get(m_key) is not None:
+                        IW_pylcaio_to_bw2[IW_category] = methods.get(
+                            m_key,
+                            {}
+                        ).get('abbreviation')
+                    else:
+                        m_key = (m_key[0], m_key[1].title(),)
+                        IW_pylcaio_to_bw2[IW_category] = methods.get(
+                            m_key,
+                            {}
+                        ).get('abbreviation')
                 else:
-                    IW_pylcaio_to_bw2[IW_category] = \
-                    methods.get(('IMPACTWorld+ (Default_Recommended_Midpoint 1.28)', IW_category.split(' (')[0]))[
-                        'abbreviation']
+                    m_key = ('IMPACTWorld+ (Default_Recommended_Midpoint 1.28)', IW_category.split(' (')[0],)
+                    if methods.get(m_key) is not None:
+                        IW_pylcaio_to_bw2[IW_category] = methods.get(
+                            m_key,
+                            {}
+                        ).get('abbreviation')
+                    else:
+                        m_key = (m_key[0], m_key[1].title(),)
+                        IW_pylcaio_to_bw2[IW_category] = methods.get(
+                            m_key,
+                            {}
+                        ).get('abbreviation')
+
             aggregated_results.index = list(IW_pylcaio_to_bw2.values())
 
             match_uuid_to_hash = {v: k for k, v in match_hash_to_uuid.items()}
@@ -2135,8 +2155,11 @@ class Analysis:
                     'exchanges': aggregated_results.loc[:, process_hash][aggregated_results.loc[:, process_hash] != 0].to_dict()}
             for process_hash in aggregated_results.columns:
                 bw2_dict[(created_database_name, process_hash)]['exchanges'] = list(
-                    {k: {'input': ('biosphere3', k), 'amount': v, 'type': 'biosphere'} for k, v in
-                     bw2_dict[(created_database_name, process_hash)]['exchanges'].items()}.values())
+                    {
+                        k: {'input': ('biosphere3', k), 'amount': v, 'type': 'biosphere'} for k, v in
+                        bw2_dict[(created_database_name, process_hash)]['exchanges'].items() if k is not None
+                    }.values())
+
             print('Matching ecoinvent data with hybrid data')
             # to link ecoinvent exchanges to exiobase exchanges, we need the original ecoinvent to also be in a dict format
             bw2_eco_dict = db.load()
