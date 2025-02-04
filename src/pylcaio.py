@@ -32,12 +32,143 @@ import re
 import pkg_resources
 import warnings
 from brightway2 import *
-from bw2agg.scores import add_all_unit_score_exchanges_and_cfs
+# from bw2agg.scores import add_all_unit_score_exchanges_and_cfs
 import hashlib
 
-pd.set_option('mode.chained_assignment', None)
 
-# pylint: disable-msg=C0103
+import logging
+import brightway2 as bw2
+import pymrio
+from tqdm import tqdm
+import json
+import numpy as np
+import pandas as pd
+import wurst
+import wurst.searching as ws
+
+
+class Hybridize:
+    def __init__(self, bw2_project_name, ecoinvent_db_name, path_to_exiobase):
+
+        # set up logging tool
+        self.logger = logging.getLogger('pylcaio')
+        self.logger.setLevel(logging.INFO)
+        self.logger.handlers = []
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        ch.setFormatter(formatter)
+        self.logger.addHandler(ch)
+        self.logger.propagate = False
+
+        # set up brightway project
+        if bw2_project_name not in bw2.projects:
+            raise KeyError("The brightway project name passed does not match with any existing brightway projects.")
+        bw2.projects.set_current(bw2_project_name)
+
+        # check ecoinvent database exists in project
+        if ecoinvent_db_name not in bw2.databases:
+            raise KeyError(
+                "The ecoinvent database name passed does not match with the existing databases within the brightway project.")
+        self.db_name = ecoinvent_db_name
+
+        # need to create an LCA object to get access to the technosphere matrix later on
+        self.lca = bw2.LCA({bw2.Database(self.db_name).random(): 1}, list(bw2.methods)[0])
+
+        # load exiobase through pymrio
+        self.logger.info("Loading exiobase...")
+        self.io = pymrio.parse_exiobase3(path_to_exiobase)
+        # Y_categories = io.get_Y_categories().tolist()
+        # exiobase is in millions euros -> convert to euros
+        self.io.satellite.S[9:] /= 1000000
+        # get the reference year of used exiobase version
+        self.reference_year_IO = int(self.io.meta.description[-4:])
+
+        # TODO change all paths for relative ones
+        # load file with all filter and concordance information
+        self.filter = pd.read_excel('C://Users/11max/Desktop/Work/Modules_Python/pylcaio/pylcaio2.0/filters.xlsx', None)
+
+        # concordance between ecoinvent countries/regions and exiobase countries/regions
+        with open('C://Users/11max/Desktop/Work/Modules_Python/pylcaio/pylcaio2.0/geo_conc.json', 'r') as f:
+            self.concordance_geos = json.load(f)
+
+        self.ei_wurst = None
+        self.H = None
+        self.A_io_f_uncorrected = None
+
+        self.apply_wurst()
+
+    def apply_wurst(self):
+        """ wurst is used to fasten the identification of processes with brightway2"""
+        self.logger.info("Load ecoinvent as wurst object to speed up data treatment...")
+        self.ei_wurst = wurst.extract_brightway2_databases(self.db_name, add_identifiers=True)
+
+    def get_uncorrected_upstream_cutoff_matrix(self):
+
+        # build the concordance matrix (both sector and geo concordance)
+        self.H = pd.DataFrame(0, index=pd.MultiIndex.from_product([self.io.get_regions().tolist(),
+                                                                   self.io.get_sectors().tolist()]),
+                              columns=self.filter['Hybridized processes'].code, dtype='float')
+
+        # loop through the difference processes to-be-hybridized
+        for col in tqdm(self.H.columns, leave=True):
+            act = bw2.Database(self.db_name).get(col)
+            # extract location and corresponding exiobase sector
+            geo = act.as_dict()['location']
+            sector = self.filter['Hybridized processes'].loc[
+                self.filter['Hybridized processes'].code == act.as_dict()['code'], 'exiobase_sector'].iloc[0]
+            # if ecoinvent process location is in exiobase regions (US -> US)
+            if geo in list(self.H.index.levels[0]):
+                self.H.loc[(geo, sector), col] = 1
+            # if it needs some mapping
+            elif geo in self.concordance_geos.keys():
+                # it's a country, not a region (e.g., AR -> WL)
+                if type(self.concordance_geos[geo]) == str:
+                    self.H.loc[(self.concordance_geos[geo], sector), col] = 1
+                # it's a region (e.g., RNA -> CA + US)
+                else:
+                    # then we need to do some weighted averages based on production values of the x vector of exiobase
+                    self.H.loc[:, col] = (self.io.x.loc(axis=0)[self.concordance_geos[geo], sector] /
+                                          self.io.x.loc(axis=0)[self.concordance_geos[geo], sector].sum()).reindex(
+                        self.H.index).loc[:, 'indout'].fillna(0)
+            # special case for the dynamic region of ecoinvent: RoW
+            else:
+                covered_geos_for_product = []
+                # get all processes producing the reference product (wurst is way faster than bw2.search())
+                filtering = ws.get_many(self.ei_wurst, ws.equals('reference product', act.as_dict()['reference product']))
+                # extract the location of these processes
+                for dataset in filtering:
+                    if dataset['code'] in list(self.filter['Hybridized processes'].code):
+                        covered_geos_for_product.append(dataset['location'])
+                # only keep unique ones
+                covered_geos_for_product = set(covered_geos_for_product)
+                # remove RoW and GLO from set
+                covered_geos_for_product = covered_geos_for_product - {'RoW'} - {'GLO'}
+                # convert potential regions in countries
+                covered_countries_for_product = [self.concordance_geos[i] for i in covered_geos_for_product]
+                # convert potential list of lists as lists
+                covered_countries_for_product = [x for xs in covered_countries_for_product for x in xs]
+                # apply the weighted average for relevant countries to H
+                self.H.loc[:, col] = (self.io.x.loc(axis=0)[[i for i in self.H.index.levels[0] if
+                                                        i not in covered_countries_for_product], sector] /
+                                      self.io.x.loc(axis=0)[[i for i in self.H.index.levels[0] if
+                                                        i not in covered_countries_for_product], sector].sum()).reindex(
+                    self.H.index).loc[:, 'indout'].fillna(0)
+
+        # TODO get dynamic inflation numbers
+        inflation = 1.25
+
+        # upstream cutoff is basically the product of concordance (both sectoral and geographical) and price
+        self.A_io_f_uncorrected = self.io.A.dot(self.H *
+                                                self.filter['Hybridized processes'].set_index('code').price *
+                                                inflation)
+
+        # add a multiindex level to columns, being the name of the ecoinvent database
+        self.H = pd.concat([self.H], keys=[self.db_name], axis=1)
+        self.A_io_f_uncorrected = pd.concat([self.A_io_f_uncorrected], keys=[self.db_name], axis=1)
+        # reindex to add non-hybridized processes as columns of zeros
+        self.H = self.H.T.reindex(lca.activity_dict.keys()).fillna(0).T
+        self.A_io_f_uncorrected = self.A_io_f_uncorrected.T.reindex(lca.activity_dict.keys()).fillna(0).T
 
 
 class DatabaseLoader:
@@ -169,10 +300,11 @@ class DatabaseLoader:
         del lca_database_processed
         del io_database_processed
 
-        versions_of_ecoinvent = ['ecoinvent3.9', 'ecoinvent3.8', 'ecoinvent3.7.1', 'ecoinvent3.6', 'ecoinvent3.5']
+        versions_of_ecoinvent = ['ecoinvent3.10', 'ecoinvent3.9', 'ecoinvent3.8', 'ecoinvent3.7.1', 'ecoinvent3.6',
+                                 'ecoinvent3.5']
         if self.lca_database_name_and_version not in versions_of_ecoinvent:
             raise ValueError('The ecoinvent version you entered is not supported currently. Supported versions are: '
-                             'ecoinvent3.9, ecoinvent3.8, ecoinvent3.7.1, ecoinvent3.6 and ecoinvent3.5.')
+                             'ecoinvent3.10, ecoinvent3.9, ecoinvent3.8, ecoinvent3.7.1, ecoinvent3.6 and ecoinvent3.5.')
         if self.io_database_name_and_version.split('exiobase')[1][0] != '3':
             raise ValueError('The exiobase version you entered is not supported currently. Pylcaio only supports '
                              'exiobase3')
@@ -708,7 +840,7 @@ class LCAIO:
         self.total_prod_region = pd.DataFrame()
         self.total_prod_RoW = pd.DataFrame()
         self.dictRoW = {}
-        self.STAM_table = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/STAM_table.xlsx'), index_col=0 )
+        self.STAM_table = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/STAM_table.xlsx'), index_col=0)
         self.patching_exiobase = pd.read_excel(pkg_resources.resource_stream(__name__, '/Data/'
                                                                                        'Exiobase_patchwork.xlsx'), index_col=0)
         self.H = pd.DataFrame()
