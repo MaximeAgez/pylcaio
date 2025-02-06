@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 import wurst
 import wurst.searching as ws
+import uuid
 
 
 class Hybridize:
@@ -72,8 +73,10 @@ class Hybridize:
                 "The ecoinvent database name passed does not match with the existing databases within the brightway project.")
         self.db_name = ecoinvent_db_name
 
+        self.logger.info("Getting technosphere matrix...")
         # need to create an LCA object to get access to the technosphere matrix later on
         self.lca = bw2.LCA({bw2.Database(self.db_name).random(): 1}, list(bw2.methods)[0])
+        self.lca.lci()
 
         # load exiobase through pymrio
         self.logger.info("Loading exiobase...")
@@ -81,6 +84,7 @@ class Hybridize:
         # Y_categories = io.get_Y_categories().tolist()
         # exiobase is in millions euros -> convert to euros
         self.io.satellite.S[9:] /= 1000000
+        self.io.satellite.unit[self.io.satellite.unit == 'M.EUR'] = 'euro'
         # get the reference year of used exiobase version
         self.reference_year_IO = int(self.io.meta.description[-4:])
 
@@ -100,10 +104,22 @@ class Hybridize:
 
     def apply_wurst(self):
         """ wurst is used to fasten the identification of processes with brightway2"""
+
         self.logger.info("Load ecoinvent as wurst object to speed up data treatment...")
         self.ei_wurst = wurst.extract_brightway2_databases(self.db_name, add_identifiers=True)
 
     def get_uncorrected_upstream_cutoff_matrix(self):
+        """
+        Obtain the uncorrected upstream cutoff matrix.
+
+        Brief methodology description:
+        1. Obtain the concordance between ecoinvent processes and exiobase sectors and identify which processes of
+        ecoinvent are hybridized (in the Excel files of the Data folder of pylcaio)
+        2. Loop through the "to-hybridize" processes and apply concordances, both sectoral and geographical
+        3. Through the concordance, copy the corresponding exiobase sectors and apply the price (corrected for inflation)
+        to get the uncorrected upstream cutoffs
+
+        """
 
         # build the concordance matrix (both sector and geo concordance)
         self.H = pd.DataFrame(0, index=pd.MultiIndex.from_product([self.io.get_regions().tolist(),
@@ -167,8 +183,389 @@ class Hybridize:
         self.H = pd.concat([self.H], keys=[self.db_name], axis=1)
         self.A_io_f_uncorrected = pd.concat([self.A_io_f_uncorrected], keys=[self.db_name], axis=1)
         # reindex to add non-hybridized processes as columns of zeros
-        self.H = self.H.T.reindex(lca.activity_dict.keys()).fillna(0).T
-        self.A_io_f_uncorrected = self.A_io_f_uncorrected.T.reindex(lca.activity_dict.keys()).fillna(0).T
+        self.H = self.H.T.reindex(self.lca.activity_dict.keys()).fillna(0).T
+        self.A_io_f_uncorrected = self.A_io_f_uncorrected.T.reindex(self.lca.activity_dict.keys()).fillna(0).T
+
+    def correct_double_counting(self, method='STAM'):
+        """
+        Correcting the occurring double counting.
+
+        Brief methodology description:
+        1. First step is to add inputs of non-hybridized processes to the inventories of the hybridized processes. For
+        example, adding the inputs of a coating step to the production of a steel plate overall. This transformation
+        is given in the end by the dataframe only_hyb_with_non_hyb_inventory_converted.
+        2. We decide which inputs are relevant or not by implementing thresholds below which inputs are not considered
+        covered in the process' description
+        3. We determine the filters correcting for double counting and applying them to the uncorrected upstream cutoff
+        matrix.
+
+        :param method: [str] The method for double counting correction can be either "binary" or "STAM".
+                            Default option = "STAM"
+        """
+
+        # go to dense matrix
+        A_ff = pd.DataFrame(self.lca.technosphere_matrix.todense(), self.lca.activity_dict.keys(),
+                            self.lca.activity_dict.keys())
+        # change notation (from LCA to IO notations)
+        A_ff = pd.DataFrame(np.eye(len(A_ff)), A_ff.index, A_ff.columns) - A_ff
+
+        # only keep technosphere matrix with non-hybridized processes
+        A_not_hyb = A_ff.copy('deep')
+        A_not_hyb.loc(axis=0)[:, self.filter['Hybridized processes'].code] = 0
+
+        # only keep technosphere matrix with hybridized processes
+        A_hyb = A_ff.copy('deep')
+        not_hyb = (self.filter['Market processes'].code.tolist() +
+                   self.filter['Internal and activities'].code.tolist() +
+                   self.filter['Empty and aggregated processes'].code.tolist())
+        A_hyb.loc(axis=0)[:, not_hyb] = 0
+
+        # need to save RAM
+        del A_ff
+
+        # invert the technosphere matrix with only non-hybridized processes
+        inverse = pd.DataFrame(np.linalg.inv(np.eye(len(A_not_hyb.values)) - A_not_hyb.values), A_not_hyb.index,
+                               A_not_hyb.columns)
+
+        # need to save RAM
+        del A_not_hyb
+
+        # multiply the inverse with A_hyb to include the inputs of non-hybridized processes in the description of
+        # hybridized processes
+        only_hyb_with_non_hyb_inventory_converted = A_hyb.dot(inverse)
+
+        # need to save RAM
+        del A_hyb
+
+        # what constitutes a legit input in an LCA description? Does a 1e-11kg of plastic input /kg of product
+        # warrant confidence that the LCA description is full and should not be completed? Nope. We set the threshold
+        # of a relevant input to 1e-7, to account for cases with very limited quantities of metals used in coating.
+        not_capital_goods = ws.get_many(self.ei_wurst, ws.exclude(ws.contains('unit', 'unit')))
+        not_capital_goods_codes = []
+        # extract the location of these processes
+        for dataset in not_capital_goods:
+            not_capital_goods_codes.append((dataset['database'], dataset['code']))
+        # apply the threshold
+        only_hyb_with_non_hyb_inventory_converted.loc[not_capital_goods_codes] = \
+        only_hyb_with_non_hyb_inventory_converted.loc[not_capital_goods_codes].mask(
+            only_hyb_with_non_hyb_inventory_converted.loc[not_capital_goods_codes] < 1e-7, 0)
+
+        # for capital goods, quantities are always extremely small due to the allocation over the lifetime, threshold
+        # is thus put to 1e-16 instead
+        only_hyb_with_non_hyb_inventory_converted[only_hyb_with_non_hyb_inventory_converted < 1e-16] = 0
+
+        if method == 'binary':
+            # convert the ecoinvent inputs covered per process to exiobase sectors
+            lambda_filter_matrix = self.H.dot(only_hyb_with_non_hyb_inventory_converted)
+            # only keep inputs that are NOT covered by ecoinvent (i.e., equal to zero)
+            lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
+            # changes the 0s to 1s
+            lambda_filter_matrix[lambda_filter_matrix == 0] = 1
+            # NaNs are the places where covered inputs were, fill with 0s
+            lambda_filter_matrix = lambda_filter_matrix.fillna(0)
+
+            # apply binary correction to uncorrected upstream cutoffs
+            self.A_io_f = self.A_io_f_uncorrected.multiply(lambda_filter_matrix)
+
+        elif method == 'STAM':
+            # convert the ecoinvent inputs covered per process to exiobase sectors
+            lambda_filter_matrix = self.H.dot(only_hyb_with_non_hyb_inventory_converted)
+            # only keep inputs that are NOT covered by ecoinvent (i.e., equal to zero)
+            lambda_filter_matrix = lambda_filter_matrix.mask(lambda_filter_matrix > 0)
+            # changes the 0s to 1s
+            lambda_filter_matrix[lambda_filter_matrix == 0] = 1
+            # NaNs are the places where covered inputs were, fill with 0s
+            lambda_filter_matrix = lambda_filter_matrix.fillna(0)
+
+            # TODO update path
+            # need to check if a missing input is legit or due to an omission
+            self.STAM_table = pd.read_excel(
+                'C://Users/11max/Desktop/Work/Modules_Python/pylcaio/src/Data/STAM_table.xlsx', index_col=0)
+            with open('C://Users/11max/Desktop/Work/Modules_Python/pylcaio/pylcaio2.0/STAM_categories.txt') as file:
+                self.io_categories = eval(file.read())
+
+            # G contains the filter from the STAM table
+            self.G = pd.DataFrame(0, index=self.io.get_sectors(), columns=self.STAM_table.columns)
+            for col in self.G.columns:
+                self.G.loc[self.io_categories[col], col] = 1
+            # extend from 200 sectors to the 9800 sectors of exiobase
+            self.G = pd.concat([self.G] * len(self.io.get_regions()), axis=0)
+            # add first level of multiindex (regions)
+            self.G.index = pd.MultiIndex.from_product([self.io.get_regions(), self.io.get_sectors()],
+                                                      names=['region', 'sector'])
+            # TODO update path
+            # we consider that inputs of food in exiobase sectors are due to canteens and such -> exclude as we consider
+            # employees would eat another way if canteen was not there -> canteen not required for the manufacture for
+            # the commodity/service
+            self.remove_canteen = pd.read_excel(
+                'C://Users/11max/Desktop/Work/Modules_Python/pylcaio/pylcaio2.0/force_canteen_out.xlsx', index_col=0)
+
+            # gamma represents the inputs that are deemed missing on purpose based on STAM
+            gamma_filter_matrix = self.G.dot((self.STAM_table.mul(self.remove_canteen)).dot(self.G.T.dot(self.H)))
+
+
+            # phi represents the presence of inputs of similar functionality within the LCA description
+            # presence of one of these inputs (e.g., diesel) forces the value zero to all other functionally similar
+            # EEIO inputs (e.g., gasoline or kerosene)
+            phi_filter_matrix = pd.DataFrame(1, index=self.G.index, columns=self.lca.activity_dict.keys())
+            # convert the used inputs into used categories
+            categories_used_by_processes = self.G.T.dot(self.H.dot(only_hyb_with_non_hyb_inventory_converted))
+            # force to zero the following categories
+            for category in ['Liquid Fuels', 'Solid Fuels', 'Gaseous Fuels', 'Electricity/heat', 'Transport']:
+                phi_filter_matrix.loc[[i for i in phi_filter_matrix.index if i[1] in self.io_categories[category]],
+                                      categories_used_by_processes.loc[category] != 0] = 0
+
+            # apply various filters to remove the double counting from the uncorrected upstream cutoffs matrix
+            self.A_io_f = phi_filter_matrix.multiply(
+                gamma_filter_matrix.multiply(lambda_filter_matrix.multiply(self.A_io_f_uncorrected)))
+
+    def import_exiobase_in_bw2(self, culling_threshold=1e-7):
+        """
+        Function import exiobase3 within the brightway2 database
+        :param culling_threshold: the thrshold (in euros) below which the inputs will not be added to the IO description
+                                  in brightway2. This ensures a smoother run of calculations as exiobase is  not sparse
+                                  at all. And do we care if 1e-11 euros of whatever input for the production 1 euro of
+                                  a given product is lost? Nope.
+        :return:
+        """
+
+        # first, create the biosphere3 of exiobase3 environmental flows
+        db_biosphere_exiobase_name = 'biosphere3_exiobase'
+
+        exio3_biosphere = {}
+
+        for env_stressor in self.io.satellite.unit.index:
+            code = str(uuid.uuid4())
+
+            if ' - air' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('air',),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ' - water' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('water',),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ' - soil' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('soil',),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ('Cropland' in env_stressor or 'Forest area' in env_stressor or
+                  'Other land Use' in env_stressor or 'Permanent pastures' in env_stressor or
+                  'Infrastructure land' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'land'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Extraction' in env_stressor and (
+                    'Crop residues' in env_stressor or 'Fishery' in env_stressor or
+                    'Fodder crops' in env_stressor or 'Forestry' in env_stressor or
+                    'Grazing' in env_stressor or 'Primary Crops' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'biotic'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Extraction' in env_stressor and (
+                    'Fossil Fuel' in env_stressor or 'Metal Ores' in env_stressor or
+                    'Non-Metallic Minerals' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'in ground'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Water ' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'in water'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Energy ' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "inventory indicator",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('inventory indicator', 'resource use'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Emissions nec - waste - undef' == env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "inventory indicator",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('inventory indicator', 'waste'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ('axes' in env_stressor or 'wages' in env_stressor or 'Operating surplus' in env_stressor or
+                  'Employment' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "economic",
+                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "categories": ('economic', 'primary production factor'),
+                    "name": env_stressor,
+                    "code": code
+                }
+
+        # reformat in convenient dictionary for search of code from name of environmental flow
+        exio3_biosphere_bw2_finding_codes = {v['name']: v['code'] for k, v in exio3_biosphere.items()}
+
+        # then, create the brightway2 activities for exiobase3
+        db_exiobase_name = 'exiobase'
+
+        exio3_bw2 = {
+            (db_exiobase_name, uuid.uuid4().hex): {
+                "type": "process",
+                "unit": "euro",
+                "location": i[0],
+                "name": i[1],
+                "reference product": i[1],
+                "database": db_exiobase_name,
+                "exchanges": []}
+            for i in self.io.A.columns
+        }
+
+        # add codes, can't add in dict comprehension because uuid.uuid4().hex is not fix
+        for sector in exio3_bw2.keys():
+            exio3_bw2[sector]['code'] = sector[1]
+
+        # reformat in convenient dictionary for search of code from name and location
+        exio3_bw2_finding_codes = {(v['name'], v['location']): v['code'] for k, v in exio3_bw2.items()}
+
+        self.logger.info("Formatting technosphere inputs...")
+
+        # add the production exchanges to the activities of exiobase3
+        for sector in exio3_bw2:
+            exio3_bw2[sector]['exchanges'].append({
+                "amount": 1,
+                "name": exio3_bw2[sector]['name'],
+                "location": exio3_bw2[sector]['location'],
+                "input": (db_exiobase_name, exio3_bw2[sector]['code']),
+                "type": "production",
+                "unit": "euro",
+                "flow": str(uuid.uuid4())
+            })
+
+        # use stack to change from dataframe 9800x9800 to series 96040000x1 (faster that way)
+        df = self.io.A.stack(future_stack=True).stack(future_stack=True)
+
+        # exiobase is really not sparse with a bunch of very small values, so we cull those below the given threshold
+        df = df[abs(df) > culling_threshold]
+
+        # go to dict for speed
+        df_dict = df.to_dict()
+
+        # populate the technosphere exchanges within the activities of exiobase3
+        for exc in tqdm(df_dict, leave=True):
+            # identify purchasing sector
+            purchaser_code = exio3_bw2_finding_codes[exc[2], exc[3]]
+            # identify selling sector
+            seller_code = exio3_bw2_finding_codes[exc[1], exc[0]]
+
+            exio3_bw2[(db_exiobase_name, purchaser_code)]['exchanges'].append({
+                "amount": df_dict[exc],
+                "name": exc[1],
+                "location": exc[0],
+                "input": (db_exiobase_name, seller_code),
+                "type": "technosphere",
+                "unit": "euro",
+                "flow": str(uuid.uuid4())
+            })
+
+        # use stack to change from dataframe 1113x9800 to series 10907400x1
+        dff = self.io.satellite.S.stack(future_stack=True).stack(future_stack=True)
+        # only keep non-zero values
+        dff = dff[dff != 0]
+        # go to dict for speed
+        dff_dict = dff.to_dict()
+
+        self.logger.info("Formatting biosphere inputs...")
+
+        # populate the biosphere exchanges within the activities of exiobase3
+        for exc in tqdm(dff_dict, leave=True):
+            # identify emitting/extracting sector
+            purchaser_code = exio3_bw2_finding_codes[exc[1], exc[2]]
+            # identify environmental stressor emitted/extracted
+            env_stressor_code = exio3_biosphere_bw2_finding_codes[exc[0]]
+
+            exio3_bw2[(db_exiobase_name, purchaser_code)]['exchanges'].append({
+                "amount": dff_dict[exc],
+                "name": exc[0],
+                "input": (db_biosphere_exiobase_name, env_stressor_code),
+                "type": 'biosphere',
+                "unit": self.io.satellite.unit.loc[exc[0], 'unit'],
+                "flow": str(uuid.uuid4())
+            })
+
+        # write the biosphere database
+        self.logger.info("Writing biosphere3 database for exiobase...")
+        bw2.Database(db_biosphere_exiobase_name).write(exio3_biosphere)
+
+        # write the exiobase3 database
+        self.logger.info("Writing exiobase database...")
+        bw2.Database(db_exiobase_name).write(exio3_bw2)
+
+        self.logger.info("Importing LCIA method for exiobase...")
+
+        # Import a specific impact method to operate with exiobase elementary flows
+        C_exio = pd.read_excel('C://Users/11max/PycharmProjects/IW_Reborn/Databases/Impact_world_2.1/exiobase/'
+                               'impact_world_plus_2.1_expert_version_exiobase.xlsx', index_col=0)
+        C_exio = C_exio.stack()
+        C_exio = C_exio[C_exio != 0]
+
+        # can't just take C_exio.index.levels[0] -> it would include empty impact categories (e.g., Ionizing radiations)
+        relevant_methods = set([i[0] for i in C_exio.index])
+
+        # loop through the different methods to create
+        for method_name in relevant_methods:
+            # check if it's a midpoint
+            if method_name.split(' (')[1].split(')')[0] not in ['DALY', 'PDF.m2.yr']:
+                new_method = bw2.Method(
+                    ('IMPACT World+ v2.1 - exiobase specific', 'Midpoint', method_name.split(' (')[0]))
+                new_method.register()
+                new_method.metadata["unit"] = method_name.split(' (')[0].split(')')[0]
+            # or human health
+            elif method_name.split(' (')[1].split(')')[0] == 'DALY':
+                new_method = bw2.Method(
+                    ('IMPACT World+ v2.1 - exiobase specific', 'Human health', method_name.split(' (')[0]))
+                new_method.register()
+                new_method.metadata["unit"] = method_name.split(' (')[0].split(')')[0]
+            # or ecosystem quality
+            elif method_name.split(' (')[1].split(')')[0] == 'PDF.m2.yr':
+                new_method = bw2.Method(
+                    ('IMPACT World+ v2.1 - exiobase specific', 'Ecosystem quality', method_name.split(' (')[0]))
+                new_method.register()
+                new_method.metadata["unit"] = method_name.split(' (')[0].split(')')[0]
+
+            # filter CFs for the method we are looping for
+            CFs = C_exio.loc[method_name]
+
+            # store the CFs in the bw2 format
+            C_data = []
+            for CF in CFs.index:
+                C_data.append(((db_biosphere_exiobase_name, exio3_biosphere_bw2_finding_codes[CF]), CFs.loc[CF]))
+
+            # write the method in brightway2
+            new_method.write(C_data)
 
 
 class DatabaseLoader:
