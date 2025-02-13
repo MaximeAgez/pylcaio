@@ -1,3 +1,0 @@
-['CML 2001; acidification potential; average European; kg SO2-Eq',
-[('Problem oriented approach: baseline (CML, 2001)','acidification (incl. fate, average Europe total, A&B)','AP ( Huijbregts, 1999; average Europe total, A&B)','kg SO2 eq.')],
-'Acid Rain']

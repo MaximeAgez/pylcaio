@@ -1,4 +1,0 @@
-{'AT':'RER','AU':'GLO','BE':'RER','BG':'RER','BR':'RLA','CA':'RNA','CH':'RER','CN':'RSA','CY':'RER','CZ':'RER','DE':'RER',
-'DK':'RER','EE':'RER','ES':'RER','FI':'RER','FR':'RER','GB':'RER','GR':'RER','HR':'RER','HU':'RER','ID':'RAS','IE':'RER',
-'IN':'RAS','IT':'RER','JP':'RAS','KR':'RAS','LT':'RER','LU':'RER','LV':'RER','MT':'RER','MX':'RLA','NL':'RER','NO':'RER',
-'PL':'RER','PT':'RER','RO':'RER','RU':'RER','SE':'RER','SI':'RER','SK':'RER','TR':'RER','TW':'RAS','US':'RNA','ZA':'RAF'}
