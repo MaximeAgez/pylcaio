@@ -394,7 +394,6 @@ class Hybridize_ecoinvent:
             del eco_to_exio
             del STAM_table
             del remove_canteen
-            del self.A_io
 
             # instead of phi, we do it directly into lambda, saves RAM
             # we correct lambda for the presence of inputs of similar functionality within the LCA description
@@ -624,6 +623,8 @@ class Hybridize_ecoinvent:
 
     def import_hybridized_database(self, cutoff=0.00001):
         """Function imports the hybridized version of ecoinvent into brightway2."""
+
+        del self.A_io
 
         # get codes of exiobase in dictionary for speed
         db_exiobase_name = 'exiobase'
@@ -1094,7 +1095,6 @@ class Hybridize_regioinvent:
             del eco_to_exio
             del STAM_table
             del remove_canteen
-            del self.A_io
 
             self.logger.info("Getting the phi matrix for double counting correction...")
             # instead of phi, we do it directly into lambda, saves RAM
