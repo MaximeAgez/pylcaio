@@ -76,6 +76,9 @@ class Hybridize_ecoinvent:
         # we do not store the whole io object as many of the attributes are useless to us and we are short on RAM
         self.x_io = io.x.copy()
         self.A_io = io.A.copy()
+        self.S_exio = io.satellite.S.copy()
+        # million euros to euros
+        self.S_exio.iloc[9:] /= 1000000
         self.sectors_io = io.get_sectors().tolist()
         self.regions_io = io.get_regions().tolist()
         self.io_units = io.satellite.unit.copy()
@@ -90,8 +93,10 @@ class Hybridize_ecoinvent:
                 __name__, '/Data/capitals_exiobase/K_cfc_pxp_exio3.8.2_'+str(self.reference_year_IO)+'.gz.pickle'),
                 'rb') as file:
             K = pickle.load(file)
-        # add capital matrix to technology matrix. No need to adjust satellite accounts because they're not used
+        # add capital matrix to technology matrix
         self.A_io += K
+        # since we endogenize capitals, remove them from satellite account
+        self.S_exio.loc['Operating surplus: Consumption of fixed capital'] = 0
 
         # load file with all filter and concordance information
         self.filter = pd.read_excel(pkg_resources.resource_filename(
@@ -427,13 +432,13 @@ class Hybridize_ecoinvent:
 
         exio3_biosphere = {}
 
-        for env_stressor in self.io.satellite.unit.index:
+        for env_stressor in self.io_units.index:
             code = str(uuid.uuid4())
 
             if ' - air' in env_stressor:
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "emission",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('air',),
                     "name": env_stressor,
                     "code": code
@@ -441,7 +446,7 @@ class Hybridize_ecoinvent:
             elif ' - water' in env_stressor:
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "emission",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('water',),
                     "name": env_stressor,
                     "code": code
@@ -449,7 +454,7 @@ class Hybridize_ecoinvent:
             elif ' - soil' in env_stressor:
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "emission",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('soil',),
                     "name": env_stressor,
                     "code": code
@@ -459,7 +464,7 @@ class Hybridize_ecoinvent:
                   'Infrastructure land' in env_stressor):
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "natural resource",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('natural resource', 'land'),
                     "name": env_stressor,
                     "code": code
@@ -470,7 +475,7 @@ class Hybridize_ecoinvent:
                     'Grazing' in env_stressor or 'Primary Crops' in env_stressor):
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "natural resource",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('natural resource', 'biotic'),
                     "name": env_stressor,
                     "code": code
@@ -480,7 +485,7 @@ class Hybridize_ecoinvent:
                     'Non-Metallic Minerals' in env_stressor):
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "natural resource",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('natural resource', 'in ground'),
                     "name": env_stressor,
                     "code": code
@@ -488,7 +493,7 @@ class Hybridize_ecoinvent:
             elif 'Water ' in env_stressor:
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "natural resource",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('natural resource', 'in water'),
                     "name": env_stressor,
                     "code": code
@@ -496,7 +501,7 @@ class Hybridize_ecoinvent:
             elif 'Energy ' in env_stressor:
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "inventory indicator",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('inventory indicator', 'resource use'),
                     "name": env_stressor,
                     "code": code
@@ -504,7 +509,7 @@ class Hybridize_ecoinvent:
             elif 'Emissions nec - waste - undef' == env_stressor:
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "inventory indicator",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('inventory indicator', 'waste'),
                     "name": env_stressor,
                     "code": code
@@ -513,7 +518,7 @@ class Hybridize_ecoinvent:
                   'Employment' in env_stressor):
                 exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
                     "type": "economic",
-                    "unit": self.io.satellite.unit.loc[env_stressor, 'unit'],
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
                     "categories": ('economic', 'primary production factor'),
                     "name": env_stressor,
                     "code": code
@@ -534,7 +539,7 @@ class Hybridize_ecoinvent:
                 "reference product": i[1],
                 "database": db_exiobase_name,
                 "exchanges": []}
-            for i in self.io.A.columns
+            for i in self.A_io.columns
         }
 
         # add codes, can't add in dict comprehension because uuid.uuid4().hex is not fix
@@ -559,7 +564,7 @@ class Hybridize_ecoinvent:
             })
 
         # use stack to change from dataframe 9800x9800 to series 96040000x1 (faster that way)
-        df = self.io.A.stack(future_stack=True).stack(future_stack=True)
+        df = self.A_io.stack(future_stack=True).stack(future_stack=True)
 
         # exiobase is really not sparse with a bunch of very small values, so we cull those below the given threshold
         df = df[abs(df) > culling_threshold]
@@ -585,7 +590,7 @@ class Hybridize_ecoinvent:
             })
 
         # use stack to change from dataframe 1113x9800 to series 10907400x1
-        dff = self.io.satellite.S.stack(future_stack=True).stack(future_stack=True)
+        dff = self.S_exio.stack(future_stack=True).stack(future_stack=True)
         # only keep non-zero values
         dff = dff[dff != 0]
         # go to dict for speed
@@ -605,7 +610,7 @@ class Hybridize_ecoinvent:
                 "name": exc[0],
                 "input": (db_biosphere_exiobase_name, env_stressor_code),
                 "type": 'biosphere',
-                "unit": self.io.satellite.unit.loc[exc[0], 'unit'],
+                "unit": self.io_units.loc[exc[0], 'unit'],
                 "flow": str(uuid.uuid4())
             })
 
@@ -616,9 +621,6 @@ class Hybridize_ecoinvent:
         # write the exiobase3 database
         self.logger.info("Writing exiobase database...")
         bw2.Database(db_exiobase_name).write(exio3_bw2)
-
-        # save some RAM
-        del self.io
 
     def import_hybridized_database(self, cutoff=0.00001):
         """Function imports the hybridized version of ecoinvent into brightway2."""
