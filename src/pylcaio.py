@@ -87,7 +87,8 @@ class Hybridize_ecoinvent:
 
         # load capital matrix of exiobase (capital endogenization)
         with gzip.open(pkg_resources.resource_filename(
-                __name__, '/Data/capitals_exiobase/K_cfc_pxp_exio3.8.2_'+self.reference_year_IO+'.gz.pickle'), 'rb') as file:
+                __name__, '/Data/capitals_exiobase/K_cfc_pxp_exio3.8.2_'+str(self.reference_year_IO)+'.gz.pickle'),
+                'rb') as file:
             K = pickle.load(file)
         # add capital matrix to technology matrix. No need to adjust satellite accounts because they're not used
         self.A_io += K
@@ -809,7 +810,8 @@ class Hybridize_regioinvent:
 
         # load capital matrix of exiobase (capital endogenization)
         with gzip.open(pkg_resources.resource_filename(
-                __name__, '/Data/capitals_exiobase/K_cfc_pxp_exio3.8.2_'+self.reference_year_IO+'.gz.pickle'), 'rb') as file:
+                __name__, '/Data/capitals_exiobase/K_cfc_pxp_exio3.8.2_'+str(self.reference_year_IO)+'.gz.pickle'),
+                'rb') as file:
             K = pickle.load(file)
         # add capital matrix to technology matrix. No need to adjust satellite accounts because they're not used
         self.A_io += K
