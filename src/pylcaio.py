@@ -317,6 +317,8 @@ class Hybridize_ecoinvent:
                             Default option = "STAM"
         """
 
+        self.logger.info("Getting the lambda matrix for double counting correction...")
+
         # change size of covered_inputs to match exiobase sectors
         multi_index = pd.MultiIndex.from_product([self.regions_io, self.covered_inputs.index])
         self.covered_inputs = pd.concat([self.covered_inputs] * len(self.regions_io), axis=0)
@@ -394,6 +396,8 @@ class Hybridize_ecoinvent:
             del eco_to_exio
             del STAM_table
             del remove_canteen
+
+            self.logger.info("Getting the phi matrix for double counting correction...")
 
             # instead of phi, we do it directly into lambda, saves RAM
             # we correct lambda for the presence of inputs of similar functionality within the LCA description
@@ -641,7 +645,7 @@ class Hybridize_ecoinvent:
             # so if an input is smaller than cutoff of the total price of the product -> irrelevant input
             for process_code in tqdm(list(self.A_io_f.columns), leave=True):
                 self.A_io_f.loc[:, process_code] = self.A_io_f.loc[:, process_code].where(
-                    self.A_io_f.loc[:, process_code] > prices.loc[process_code] * cutoff).fillna(0)
+                    self.A_io_f.loc[:, process_code] > prices.loc[process_code[1]] * cutoff).fillna(0)
 
         self.logger.info("Reformat the upstream cutoffs matrix...")
         # change to pd.Series and remove null inputs to speed things up
@@ -701,15 +705,18 @@ class Hybridize_ecoinvent:
 
         # loads IW+ for ecoinvent
         if '3.9' in self.ei_version:
-            iw_ei = bw2.BW2Package.load_file(pkg_resources.resource_filename(__name__,
-                '/Data/LCIA/impact_world_plus_21_brightway2_expert_version_ei39.6cd1745d7173fc689a3cc8c44fd3e41d.bw2package'))
+            iw_ei = bw2.BW2Package.load_file(pkg_resources.resource_filename(
+                __name__, '/Data/ecoinvent/ei'+self.ei_version+
+                          '/LCIA/impact_world_plus_21_brightway2_expert_version_ei39.6cd1745d7173fc689a3cc8c44fd3e41d.bw2package'))
         elif '3.10' in self.ei_version:
-            iw_ei = bw2.BW2Package.load_file(pkg_resources.resource_filename(__name__,
-                '/Data/LCIA/impact_world_plus_21_brightway2_expert_version_ei310.5535d12bedce3770ffef004e84229fd1.bw2package'))
+            iw_ei = bw2.BW2Package.load_file(pkg_resources.resource_filename(
+                __name__, '/Data/ecoinvent/ei'+self.ei_version+
+                          '/LCIA/impact_world_plus_21_brightway2_expert_version_ei310.5535d12bedce3770ffef004e84229fd1.bw2package'))
 
         # loads IW+ for exiobase
-        C_exio = pd.read_excel(pkg_resources.resource_filename(__name__,
-                               '/Data/LCIA/impact_world_plus_2.1_expert_version_exiobase.xlsx'), index_col=0)
+        C_exio = pd.read_excel(pkg_resources.resource_filename(
+            __name__, '/Data/ecoinvent/ei'+self.ei_version+'/LCIA/impact_world_plus_2.1_expert_version_exiobase.xlsx'),
+            index_col=0)
         # change to series (more efficient)
         C_exio = C_exio.stack()
         # remove null CFs
@@ -804,8 +811,6 @@ class Hybridize_regioinvent:
         self.A_io = io.A.copy()
         self.sectors_io = io.get_sectors().tolist()
         self.regions_io = io.get_regions().tolist()
-        self.io_units = io.satellite.unit.copy()
-        self.io_units[self.io_units == 'M.EUR'] = 'euro'
         # get the reference year of used exiobase version
         self.reference_year_IO = int(io.meta.description[-4:])
         # save RAM
@@ -1095,6 +1100,7 @@ class Hybridize_regioinvent:
             del eco_to_exio
             del STAM_table
             del remove_canteen
+            del self.A_io
 
             self.logger.info("Getting the phi matrix for double counting correction...")
             # instead of phi, we do it directly into lambda, saves RAM
