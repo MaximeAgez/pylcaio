@@ -840,11 +840,6 @@ class Hybridize_regioinvent:
         self.filter['Market processes'].location = self.filter['Market processes'].location.fillna('NA')
         self.filter['Internal and activities'].location = self.filter['Internal and activities'].location.fillna('NA')
 
-        # if not running on 0.99 filter, there will be NaNs in the code for uncovered processes
-        self.filter['Hybridized processes'] = self.filter['Hybridized processes'].dropna(subset=['code'])
-        self.filter['Market processes'] = self.filter['Market processes'].dropna(subset=['code'])
-        self.filter['Internal and activities'] = self.filter['Internal and activities'].dropna(subset=['code'])
-
         self.filter_ei = pd.read_excel(pkg_resources.resource_filename(
             __name__, '/Data/ecoinvent/ei'+self.ei_version+'/mappings/filters.xlsx'), None)
 
@@ -942,6 +937,11 @@ class Hybridize_regioinvent:
 
         # save RAM
         del self.codes_of_regioinvent
+
+        # if not running on 0.99 filter, there will be NaNs in the code for uncovered processes
+        self.filter['Hybridized processes'] = self.filter['Hybridized processes'].dropna(subset=['code'])
+        self.filter['Market processes'] = self.filter['Market processes'].dropna(subset=['code'])
+        self.filter['Internal and activities'] = self.filter['Internal and activities'].dropna(subset=['code'])
 
     def get_uncorrected_upstream_cutoff_matrix(self):
         """
