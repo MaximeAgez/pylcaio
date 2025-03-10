@@ -840,6 +840,11 @@ class Hybridize_regioinvent:
         self.filter['Market processes'].location = self.filter['Market processes'].location.fillna('NA')
         self.filter['Internal and activities'].location = self.filter['Internal and activities'].location.fillna('NA')
 
+        # if not running on 0.99 filter, there will be NaNs in the code for uncovered processes
+        self.filter['Hybridized processes'] = self.filter['Hybridized processes'].dropna(subset=['code'])
+        self.filter['Market processes'] = self.filter['Market processes'].dropna(subset=['code'])
+        self.filter['Internal and activities'] = self.filter['Internal and activities'].dropna(subset=['code'])
+
         self.filter_ei = pd.read_excel(pkg_resources.resource_filename(
             __name__, '/Data/ecoinvent/ei'+self.ei_version+'/mappings/filters.xlsx'), None)
 
@@ -861,6 +866,7 @@ class Hybridize_regioinvent:
         self.codes_of_regioinvent = None
         self.A_io_f = None
         self.A_io_f_uncorrected = None
+        self.A_io_index = None
 
         self.get_relevant_info()
 
@@ -892,6 +898,8 @@ class Hybridize_regioinvent:
         ecoinvent in brightway2), uuids won't match. This function thus takes the uuid codes of the user-generated
         regioinvent and connects those codes to all the necessary information contained in the filter attribute
         """
+
+        self.logger.info("Connecting user-defined regioinvent codes to information matrices...")
 
         # easily find codes from product/name/location tuple
         codes_of_regioinvent = {
@@ -991,8 +999,12 @@ class Hybridize_regioinvent:
         self.A_io_f_uncorrected.columns = pd.MultiIndex.from_arrays(
             [[self.db_name] * len(self.A_io_f_uncorrected.columns), self.A_io_f_uncorrected.columns])
 
+        # keep index in memory
+        self.A_io_index = self.A_io.index
+
         # save RAM
         del self.x_io
+        del self.A_io
 
     def determine_covered_inputs(self):
         """
@@ -1100,7 +1112,7 @@ class Hybridize_regioinvent:
         multi_index = pd.MultiIndex.from_product([self.regions_io, self.covered_inputs.index])
         self.covered_inputs = pd.concat([self.covered_inputs] * len(self.regions_io), axis=0)
         self.covered_inputs.index = multi_index
-        self.covered_inputs = self.covered_inputs.reindex(self.A_io.index).fillna(0)
+        self.covered_inputs = self.covered_inputs.reindex(self.A_io_index).fillna(0)
 
         # only keep inputs that are NOT covered by ecoinvent (i.e., equal to zero)
         self.covered_inputs = self.covered_inputs.mask(self.covered_inputs > 0)
@@ -1160,11 +1172,11 @@ class Hybridize_regioinvent:
             multiindex = pd.MultiIndex.from_product([self.regions_io, eco_to_exio.index])
             eco_to_exio = pd.concat([eco_to_exio] * len(self.regions_io))
             eco_to_exio.index = multiindex
-            eco_to_exio = eco_to_exio.reindex(self.A_io.index).fillna(0)
+            eco_to_exio = eco_to_exio.reindex(self.A_io_index).fillna(0)
 
             # gamma represents the inputs that are deemed missing on purpose based on STAM
             gamma_filter_matrix = STAM_df.dot((STAM_table.mul(remove_canteen))).dot(
-                STAM_df.T.dot(eco_to_exio.reindex(self.A_io.index).fillna(0)))
+                STAM_df.T.dot(eco_to_exio.reindex(self.A_io_index).fillna(0)))
             gamma_filter_matrix /= len(self.regions_io)
 
             # save RAM
