@@ -707,7 +707,7 @@ class Hybridize_ecoinvent:
         db.write(hybrid_ei_data)
 
     def import_lcia_method_for_hybrid_lca(self):
-        """Since hybrid LCA mixes elementary flows from ecoinvent and exiobase, we need an LCIA method that covres
+        """Since hybrid LCA mixes elementary flows from ecoinvent and exiobase, we need an LCIA method that covers
         both at the same time for convenience. That's what this function creates."""
 
         # loads IW+ for ecoinvent
@@ -816,8 +816,13 @@ class Hybridize_regioinvent:
         # we do not store the whole io object as many of the attributes are useless to us and we are short on RAM
         self.x_io = io.x.copy()
         self.A_io = io.A.copy()
+        self.S_exio = io.satellite.S.copy()
+        # million euros to euros
+        self.S_exio.iloc[9:] /= 1000000
         self.sectors_io = io.get_sectors().tolist()
         self.regions_io = io.get_regions().tolist()
+        self.io_units = io.satellite.unit.copy()
+        self.io_units[self.io_units == 'M.EUR'] = 'euro'
         # get the reference year of used exiobase version
         self.reference_year_IO = int(io.meta.description[-4:])
         # save RAM
@@ -830,6 +835,8 @@ class Hybridize_regioinvent:
             K = pickle.load(file)
         # add capital matrix to technology matrix. No need to adjust satellite accounts because they're not used
         self.A_io += K
+        # since we endogenize capitals, remove them from satellite account
+        self.S_exio.loc['Operating surplus: Consumption of fixed capital'] = 0
 
         # load file with all filter and concordance information
         self.filter = pd.read_excel(pkg_resources.resource_filename(
@@ -866,6 +873,8 @@ class Hybridize_regioinvent:
         self.get_relevant_info()
 
         self.connect_filter_to_regioinvent_codes()
+
+        self.spatialize_exiobase()
 
     def get_relevant_info(self):
         """ wurst is used to fasten the identification of processes with brightway2"""
@@ -942,6 +951,78 @@ class Hybridize_regioinvent:
         self.filter['Hybridized processes'] = self.filter['Hybridized processes'].dropna(subset=['code'])
         self.filter['Market processes'] = self.filter['Market processes'].dropna(subset=['code'])
         self.filter['Internal and activities'] = self.filter['Internal and activities'].dropna(subset=['code'])
+
+    def spatialize_exiobase(self):
+        """
+        EXIOBASE needs to be spatialized for it to work coherently with regioinvent. That's what this function does.
+        :return:
+        """
+
+        self.logger.info("Spatializing EXIOBASE...")
+
+        # the substances to be spatialized in EXIOBASE
+        substances = ['SOx', 'NOx', 'NH3', 'NMVOC', 'PM10', 'PM2.5', 'Water Consumption Blue']
+        # and the land flows
+        land_flows = ['Cropland - Cereal grains nec',
+                      'Cropland - Crops nec',
+                      'Cropland - Fodder crops-Cattle',
+                      'Cropland - Fodder crops-Meat animals nec',
+                      'Cropland - Fodder crops-Pigs',
+                      'Cropland - Fodder crops-Poultry',
+                      'Cropland - Fodder crops-Raw milk',
+                      'Cropland - Oil seeds',
+                      'Cropland - Paddy rice',
+                      'Cropland - Plant-based fibers',
+                      'Cropland - Sugar cane, sugar beet',
+                      'Cropland - Vegetables, fruit, nuts',
+                      'Cropland - Wheat',
+                      'Forest area - Forestry',
+                      'Other land Use: Total',
+                      'Permanent pastures - Grazing-Cattle',
+                      'Permanent pastures - Grazing-Meat animals nec',
+                      'Permanent pastures - Grazing-Raw milk',
+                      'Infrastructure land',
+                      'Forest area - Marginal use']
+
+        # Just change NOX to NOx for easier mapping afterwards
+        self.S_exio = self.S_exio.rename(
+            index={'NOX - waste - air': 'NOx - waste - air', 'NOX - agriculture - air': 'NOx - agriculture - air'})
+
+        # EXIOBASE has a lot of useless precision in elementary flows, e.g., 'SOx - non combustion - Agglomeration plant - sinter - air'
+        # and 'SOx - non combustion - Bricks production - air'. THis does not do anything except virtually increase the number of elementary flows
+        # which will be exploding after spatialization. So we aggregate these flows into a single one per substance
+        for substance in substances:
+            self.S_exio.loc[substance] = self.S_exio.loc[[i for i in self.S_exio.index if substance in i]].sum()
+        # delete old flows
+        for substance in substances:
+            self.S_exio = self.S_exio.drop([i for i in self.S_exio.index if substance in i and i != substance])
+
+        # now let's spatialize all the flows
+        for flow in substances + land_flows:
+            df = pd.concat([self.S_exio.loc[flow]] * len(self.regions_io), axis=1).T
+            df.index = pd.MultiIndex.from_product([self.regions_io, [flow]])
+
+            row_countries = df.index.get_level_values(0)
+            col_countries = df.columns.get_level_values(0)
+
+            mask = pd.DataFrame([[row == col for col in col_countries] for row in row_countries],
+                                index=df.index, columns=df.columns)
+
+            df = df.where(mask, 0)
+
+            self.S_exio = pd.concat([self.S_exio, df])
+        # drop non-spatialized flows
+        self.S_exio = self.S_exio.drop(substances + land_flows)
+
+        # need to create the units for the spatialized flows
+        spatialized_flows_units = pd.DataFrame(
+            'kg', index=[i for i in self.S_exio.index if i not in self.io_units.index], columns=['unit'])
+        spatialized_flows_units.loc[
+            [i for i in spatialized_flows_units.index if i[1] == 'Water Consumption Blue'], 'unit'] = 'Mm3'
+        spatialized_flows_units.loc[
+            [i for i in spatialized_flows_units.index if i[1] in land_flows], 'unit'] = 'km2'
+        self.io_units = pd.concat([self.io_units, spatialized_flows_units])
+        self.io_units = self.io_units.loc[[i for i in self.io_units.index if i in self.S_exio.index]]
 
     def get_uncorrected_upstream_cutoff_matrix(self):
         """
@@ -1184,7 +1265,6 @@ class Hybridize_regioinvent:
             del eco_to_exio
             del STAM_table
             del remove_canteen
-            del self.A_io
 
             self.logger.info("Getting the phi matrix for double counting correction...")
             # instead of phi, we do it directly into lambda, saves RAM
@@ -1206,3 +1286,291 @@ class Hybridize_regioinvent:
             self.A_io_f = self.A_io_f_uncorrected
             # and delete to save RAM
             del self.A_io_f_uncorrected
+
+    def import_exiobase_in_bw2(self, culling_threshold=1e-7):
+        """
+        Function import exiobase3 within the brightway2 database
+        :param culling_threshold: the threshold (in euros) below which the inputs will not be added to the IO description
+                                  in brightway2. This ensures a smoother run of calculations as exiobase is  not sparse
+                                  at all. And do we care if 1e-11 euros of whatever input for the production 1 euro of
+                                  a given product is lost? Nope.
+        :return:
+        """
+
+        # first, create the biosphere3 of exiobase3 environmental flows
+        db_biosphere_exiobase_name = 'biosphere3_exiobase'
+
+        exio3_biosphere = {}
+
+        for env_stressor in self.io_units.index:
+            code = str(uuid.uuid4())
+
+            if ' - air' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('air',),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ' - water' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('water',),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ' - soil' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('soil',),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Extraction' in env_stressor and (
+                    'Crop residues' in env_stressor or 'Fishery' in env_stressor or
+                    'Fodder crops' in env_stressor or 'Forestry' in env_stressor or
+                    'Grazing' in env_stressor or 'Primary Crops' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'biotic'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Extraction' in env_stressor and (
+                    'Fossil Fuel' in env_stressor or 'Metal Ores' in env_stressor or
+                    'Non-Metallic Minerals' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'in ground'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Water ' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('natural resource', 'in water'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Energy ' in env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "inventory indicator",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('inventory indicator', 'resource use'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif 'Emissions nec - waste - undef' == env_stressor:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "inventory indicator",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('inventory indicator', 'waste'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif ('axes' in env_stressor or 'wages' in env_stressor or 'Operating surplus' in env_stressor or
+                  'Employment' in env_stressor):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "economic",
+                    "unit": self.io_units.loc[env_stressor, 'unit'],
+                    "categories": ('economic', 'primary production factor'),
+                    "name": env_stressor,
+                    "code": code
+                }
+            elif env_stressor[1] in ['SOx', 'NOx', 'NH3', 'NMVOC', 'PM10', 'PM2.5']:
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "emission",
+                    "unit": self.io_units.loc[[env_stressor], 'unit'].iloc[0],
+                    "categories": ('air',),
+                    "location": env_stressor[0],
+                    "name": env_stressor[1] + ', ' + env_stressor[0],
+                    "code": code
+                }
+            elif env_stressor[1] == 'Water Consumption Blue':
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io_units.loc[[env_stressor], 'unit'].iloc[0],
+                    "categories": ('natural resource', 'in water'),
+                    "location": env_stressor[0],
+                    "name": env_stressor[1] + ', ' + env_stressor[0],
+                    "code": code
+                }
+            elif ('Cropland' in env_stressor[1] or 'Forest area' in env_stressor[1] or
+                  'Other land Use' in env_stressor[1] or 'Permanent pastures' in env_stressor[1] or
+                  'Infrastructure land' in env_stressor[1]):
+                exio3_biosphere[(db_biosphere_exiobase_name, code)] = {
+                    "type": "natural resource",
+                    "unit": self.io_units.loc[[env_stressor], 'unit'].iloc[0],
+                    "categories": ('natural resource', 'land'),
+                    "location": env_stressor[0],
+                    "name": env_stressor[1] + ', ' + env_stressor[0],
+                    "code": code
+                }
+
+        # reformat in convenient dictionary for search of code from name of environmental flow
+        exio3_biosphere_bw2_finding_codes = {v['name']: v['code'] for k, v in exio3_biosphere.items()}
+
+        # then, create the brightway2 activities for exiobase3
+        db_exiobase_name = 'exiobase'
+
+        exio3_bw2 = {
+            (db_exiobase_name, uuid.uuid4().hex): {
+                "type": "process",
+                "unit": "euro",
+                "location": i[0],
+                "name": i[1],
+                "reference product": i[1],
+                "database": db_exiobase_name,
+                "exchanges": []}
+            for i in self.A_io.columns
+        }
+
+        # add codes, can't add in dict comprehension because uuid.uuid4().hex is not fix
+        for sector in exio3_bw2.keys():
+            exio3_bw2[sector]['code'] = sector[1]
+
+        # reformat in convenient dictionary for search of code from name and location
+        exio3_bw2_finding_codes = {(v['name'], v['location']): v['code'] for k, v in exio3_bw2.items()}
+
+        self.logger.info("Formatting technosphere inputs...")
+
+        # add the production exchanges to the activities of exiobase3
+        for sector in exio3_bw2:
+            exio3_bw2[sector]['exchanges'].append({
+                "amount": 1,
+                "name": exio3_bw2[sector]['name'],
+                "location": exio3_bw2[sector]['location'],
+                "input": (db_exiobase_name, exio3_bw2[sector]['code']),
+                "type": "production",
+                "unit": "euro",
+                "flow": str(uuid.uuid4())
+            })
+
+        # use stack to change from dataframe 9800x9800 to series 96040000x1 (faster that way)
+        df = self.A_io.stack(future_stack=True).stack(future_stack=True)
+
+        # exiobase is really not sparse with a bunch of very small values, so we cull those below the given threshold
+        df = df[abs(df) > culling_threshold]
+
+        # go to dict for speed
+        df_dict = df.to_dict()
+
+        # populate the technosphere exchanges within the activities of exiobase3
+        for exc in tqdm(df_dict, leave=True):
+            # identify purchasing sector
+            purchaser_code = exio3_bw2_finding_codes[exc[2], exc[3]]
+            # identify selling sector
+            seller_code = exio3_bw2_finding_codes[exc[1], exc[0]]
+
+            exio3_bw2[(db_exiobase_name, purchaser_code)]['exchanges'].append({
+                "amount": df_dict[exc],
+                "name": exc[1],
+                "location": exc[0],
+                "input": (db_exiobase_name, seller_code),
+                "type": "technosphere",
+                "unit": "euro",
+                "flow": str(uuid.uuid4())
+            })
+
+        # use stack to change from dataframe 1113x9800 to series 10907400x1
+        dff = self.S_exio.stack(future_stack=True).stack(future_stack=True)
+        # only keep non-zero values
+        dff = dff[dff != 0]
+        # go to dict for speed
+        dff_dict = dff.to_dict()
+
+        self.logger.info("Formatting biosphere inputs...")
+
+        # populate the biosphere exchanges within the activities of exiobase3
+        for exc in tqdm(dff_dict, leave=True):
+            # identify emitting/extracting sector
+            purchaser_code = exio3_bw2_finding_codes[exc[1], exc[2]]
+            if type(exc[0]) == str:
+                # identify environmental stressor emitted/extracted
+                env_stressor_code = exio3_biosphere_bw2_finding_codes[exc[0]]
+
+                exio3_bw2[(db_exiobase_name, purchaser_code)]['exchanges'].append({
+                    "amount": dff_dict[exc],
+                    "name": exc[0],
+                    "input": (db_biosphere_exiobase_name, env_stressor_code),
+                    "type": 'biosphere',
+                    "unit": self.io_units.loc[exc[0], 'unit'],
+                    "flow": str(uuid.uuid4())
+                })
+            else:
+                env_stressor_code = exio3_biosphere_bw2_finding_codes[exc[0][1] + ', ' + exc[0][0]]
+
+                exio3_bw2[(db_exiobase_name, purchaser_code)]['exchanges'].append({
+                    "amount": dff_dict[exc],
+                    "name": exc[0][1] + ', ' + exc[0][0],
+                    "input": (db_biosphere_exiobase_name, env_stressor_code),
+                    "type": 'biosphere',
+                    "unit": self.io_units.loc[[exc[0]], 'unit'].iloc[0],
+                    "flow": str(uuid.uuid4())
+                })
+
+        # write the biosphere database
+        self.logger.info("Writing biosphere3 database for exiobase...")
+        bw2.Database(db_biosphere_exiobase_name).write(exio3_biosphere)
+
+        # write the exiobase3 database
+        self.logger.info("Writing exiobase database...")
+        bw2.Database(db_exiobase_name).write(exio3_bw2)
+
+    def import_lcia_method_for_hybrid_lca(self):
+        """Since hybrid LCA mixes elementary flows from ecoinvent and exiobase, we need an LCIA method that covers
+        both at the same time for convenience. That's what this function creates."""
+
+        # ------------------------------------- IMPACT World+ -------------------------------------------------------
+        C_exio = pd.read_excel(pkg_resources.resource_filename(
+            __name__, '/Data/regioinvent/ei'+self.ei_version+'/LCIA/impact_world_plus_2.1_expert_version_exiobase.xlsx'),
+            index_col=0)
+        # change to series (more efficient)
+        C_exio = C_exio.stack()
+        # remove null CFs
+        C_exio = C_exio[C_exio != 0]
+        # get the Total human health impact
+        total_hh = C_exio.loc[[i for i in C_exio.index if 'DALY' in i[0]]].groupby(axis=0, level=1).sum()
+        total_hh = pd.concat([total_hh], keys=['Total human health (DALY)'])
+        # get the Total ecosystem quality impact
+        total_eq = C_exio.loc[[i for i in C_exio.index if 'PDF.m2.yr' in i[0]]].groupby(axis=0, level=1).sum()
+        total_eq = pd.concat([total_eq], keys=['Total ecosystem quality (PDF.m2.yr)'])
+        # concat the totals with the original CFs
+        C_exio = pd.concat([C_exio, total_hh, total_eq])
+        # a dictionary to rapidly find the keys for exiobase elementary flows
+        exio3_biosphere_bw2_finding_codes = {act.as_dict()['name']: act.as_dict()['code'] for act in
+                                             bw2.Database('biosphere3_exiobase')}
+
+        regionalized_methods = [i for i in bw2.methods if ('IMPACT World+' in i[0] and
+                                                           'regionalized' in i[0] and
+                                                           self.ei_version in i[0])]
+
+        # write the method combining CFs for regioinvent and exiobase
+        for method_name in regionalized_methods:
+            method = bw2.Method(method_name)
+            data = method.load()
+            try:
+                for emission in C_exio.loc[method.name[2] + ' (' + method.metadata['unit'] + ')'].index:
+                    data.append((('biosphere3_exiobase', exio3_biosphere_bw2_finding_codes[emission]),
+                                           C_exio.loc[method.name[2] + ' (' + method.metadata['unit'] + ')'].loc[
+                                               emission]))
+            # KeyError is the category has no CFs in exiobase (e.g., Ionizing radiations -> no ionizing radiation
+            # elementary flows in exiobase)
+            except KeyError:
+                pass
+
+            # write in brightway2
+            method_to_import = bw2.Method(('for hybrid ecoinvent'.join(method.name[0].split('for ecoinvent')),
+                          method.name[1], method.name[2]))
+            method_to_import.register()
+            method_to_import.metadata['unit'] = method.metadata['unit']
+            method_to_import.write(data)
+
+        # ------------------------------------- ReCiPe -------------------------------------------------------
+
