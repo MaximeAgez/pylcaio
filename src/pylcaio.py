@@ -365,7 +365,7 @@ class Hybridize_ecoinvent:
                                        self.covered_inputs.columns]
 
         # groupby columns
-        self.covered_inputs = self.covered_inputs.groupby(axis=1, level=0).sum()
+        self.covered_inputs = self.covered_inputs.T.groupby(level=0).sum().T
 
     def correct_double_counting(self, method='STAM'):
         """
@@ -400,11 +400,14 @@ class Hybridize_ecoinvent:
         self.covered_inputs = self.covered_inputs.fillna(0)
 
         # get the lambda filter matrix for regioinvent
-        lambda_filter_matrix = pd.DataFrame(0, self.covered_inputs.index, self.A_io_f_uncorrected.columns, dtype=float)
+        lambda_filter_matrix = pd.DataFrame(0, self.covered_inputs.index, self.A_io_f_uncorrected.columns.levels[1],
+                                            dtype=float)
         hybridized = self.filter['Hybridized processes'].code.tolist()
         for col in tqdm(lambda_filter_matrix.columns, leave=True):
-            if col[1] in hybridized:
-                lambda_filter_matrix.loc[:, col] = self.covered_inputs.loc[:, self.codes_to_names[col[1]]]
+            if col in hybridized:
+                lambda_filter_matrix.loc[:, col] = self.covered_inputs.loc[:, self.codes_to_names[col]]
+
+        lambda_filter_matrix = pd.concat([lambda_filter_matrix], keys=[self.db_name], axis=1)
 
         # save RAM
         del self.covered_inputs
@@ -973,7 +976,7 @@ class Hybridize_regioinvent:
                 'code']
             for act in bw2.Database(self.db_name)}
 
-        for hybridized_process in tqdm(self.filter_ei['Hybridized processes'].index, leave=True):
+        for hybridized_process in self.filter_ei['Hybridized processes'].index:
             try:
                 self.filter_ei['Hybridized processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter_ei['Hybridized processes'].loc[hybridized_process, 'reference product'],
@@ -984,7 +987,7 @@ class Hybridize_regioinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter_ei['Market processes'].index, leave=True):
+        for hybridized_process in self.filter_ei['Market processes'].index:
             try:
                 self.filter_ei['Market processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter_ei['Market processes'].loc[hybridized_process, 'reference product'],
@@ -995,7 +998,7 @@ class Hybridize_regioinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter_ei['Internal and activities'].index, leave=True):
+        for hybridized_process in self.filter_ei['Internal and activities'].index:
             try:
                 self.filter_ei['Internal and activities'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter_ei['Internal and activities'].loc[hybridized_process, 'reference product'],
@@ -1006,7 +1009,7 @@ class Hybridize_regioinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter_ei['Empty and aggregated processes'].index, leave=True):
+        for hybridized_process in self.filter_ei['Empty and aggregated processes'].index:
             try:
                 self.filter_ei['Empty and aggregated processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter_ei['Empty and aggregated processes'].loc[hybridized_process, 'reference product'],
@@ -1017,7 +1020,7 @@ class Hybridize_regioinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter['Hybridized processes'].index, leave=True):
+        for hybridized_process in self.filter['Hybridized processes'].index:
             try:
                 self.filter['Hybridized processes'].loc[hybridized_process, 'code'] = codes_of_regioinvent[(
                     self.filter['Hybridized processes'].loc[hybridized_process, 'reference product'],
@@ -1028,7 +1031,7 @@ class Hybridize_regioinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter['Market processes'].index, leave=True):
+        for hybridized_process in self.filter['Market processes'].index:
             try:
                 self.filter['Market processes'].loc[hybridized_process, 'code'] = codes_of_regioinvent[(
                     self.filter['Market processes'].loc[hybridized_process, 'reference product'],
@@ -1039,7 +1042,7 @@ class Hybridize_regioinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter['Internal and activities'].index, leave=True):
+        for hybridized_process in self.filter['Internal and activities'].index:
             try:
                 self.filter['Internal and activities'].loc[hybridized_process, 'code'] = codes_of_regioinvent[(
                     self.filter['Internal and activities'].loc[hybridized_process, 'reference product'],
@@ -1143,7 +1146,7 @@ class Hybridize_regioinvent:
 
         # build the concordance matrix (both sector and geo concordance)
         concordance_matrix = pd.DataFrame(0, index=pd.MultiIndex.from_product([self.regions_io, self.sectors_io]),
-                              columns=self.filter['Hybridized processes'].code, dtype='float')
+                                          columns=self.filter['Hybridized processes'].code, dtype='float')
 
         # loop through the difference processes to-be-hybridized
         for col in tqdm(concordance_matrix.columns, leave=True):
@@ -1280,7 +1283,7 @@ class Hybridize_regioinvent:
                                        self.covered_inputs.columns]
 
         # groupby columns
-        self.covered_inputs = self.covered_inputs.groupby(axis=1, level=0).sum()
+        self.covered_inputs = self.covered_inputs.T.groupby(level=0).sum().T
 
     def correct_double_counting(self, method='STAM'):
         """
@@ -1306,11 +1309,14 @@ class Hybridize_regioinvent:
         self.covered_inputs = self.covered_inputs.fillna(0)
 
         # get the lambda filter matrix for regioinvent
-        lambda_filter_matrix = pd.DataFrame(0, self.covered_inputs.index, self.A_io_f_uncorrected.columns, dtype=float)
+        lambda_filter_matrix = pd.DataFrame(0, self.covered_inputs.index, self.A_io_f_uncorrected.columns.levels[1],
+                                            dtype=float)
         hybridized = self.filter['Hybridized processes'].code.tolist()
         for col in tqdm(lambda_filter_matrix.columns, leave=True):
-            if col[1] in hybridized:
-                lambda_filter_matrix.loc[:, col] = self.covered_inputs.loc[:, self.codes_to_names[col[1]]]
+            if col in hybridized:
+                lambda_filter_matrix.loc[:, col] = self.covered_inputs.loc[:, self.codes_to_names[col]]
+
+        lambda_filter_matrix = pd.concat([lambda_filter_matrix], keys=[self.db_name], axis=1)
 
         # save RAM
         del self.covered_inputs
