@@ -157,7 +157,7 @@ class Hybridize_ecoinvent:
         codes_of_ecoinvent = {
             (act.as_dict()['reference product'], act.as_dict()['name'], act.as_dict()['location']): act.as_dict()[
                 'code']
-            for act in bw2.Database(self.db_ei_name)}
+            for act in bw2.Database(self.db_name)}
 
         for hybridized_process in tqdm(self.filter_ei['Hybridized processes'].index, leave=True):
             try:
