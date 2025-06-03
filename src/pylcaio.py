@@ -159,45 +159,45 @@ class Hybridize_ecoinvent:
                 'code']
             for act in bw2.Database(self.db_name)}
 
-        for hybridized_process in tqdm(self.filter_ei['Hybridized processes'].index, leave=True):
+        for hybridized_process in tqdm(self.filter['Hybridized processes'].index, leave=True):
             try:
-                self.filter_ei['Hybridized processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
-                    self.filter_ei['Hybridized processes'].loc[hybridized_process, 'reference product'],
-                    self.filter_ei['Hybridized processes'].loc[hybridized_process, 'name'],
-                    self.filter_ei['Hybridized processes'].loc[hybridized_process, 'location']
+                self.filter['Hybridized processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
+                    self.filter['Hybridized processes'].loc[hybridized_process, 'reference product'],
+                    self.filter['Hybridized processes'].loc[hybridized_process, 'name'],
+                    self.filter['Hybridized processes'].loc[hybridized_process, 'location']
                 )]
             # if KeyError -> user is not using max cutoff -> some processes in filter are absent from code dict
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter_ei['Market processes'].index, leave=True):
+        for hybridized_process in tqdm(self.filter['Market processes'].index, leave=True):
             try:
-                self.filter_ei['Market processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
-                    self.filter_ei['Market processes'].loc[hybridized_process, 'reference product'],
-                    self.filter_ei['Market processes'].loc[hybridized_process, 'name'],
-                    self.filter_ei['Market processes'].loc[hybridized_process, 'location']
+                self.filter['Market processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
+                    self.filter['Market processes'].loc[hybridized_process, 'reference product'],
+                    self.filter['Market processes'].loc[hybridized_process, 'name'],
+                    self.filter['Market processes'].loc[hybridized_process, 'location']
                 )]
             # if KeyError -> user is not using max cutoff -> some processes in filter are absent from code dict
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter_ei['Internal and activities'].index, leave=True):
+        for hybridized_process in tqdm(self.filter['Internal and activities'].index, leave=True):
             try:
-                self.filter_ei['Internal and activities'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
-                    self.filter_ei['Internal and activities'].loc[hybridized_process, 'reference product'],
-                    self.filter_ei['Internal and activities'].loc[hybridized_process, 'name'],
-                    self.filter_ei['Internal and activities'].loc[hybridized_process, 'location']
+                self.filter['Internal and activities'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
+                    self.filter['Internal and activities'].loc[hybridized_process, 'reference product'],
+                    self.filter['Internal and activities'].loc[hybridized_process, 'name'],
+                    self.filter['Internal and activities'].loc[hybridized_process, 'location']
                 )]
             # if KeyError -> user is not using max cutoff -> some processes in filter are absent from code dict
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter_ei['Empty and aggregated processes'].index, leave=True):
+        for hybridized_process in tqdm(self.filter['Empty and aggregated processes'].index, leave=True):
             try:
-                self.filter_ei['Empty and aggregated processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
-                    self.filter_ei['Empty and aggregated processes'].loc[hybridized_process, 'reference product'],
-                    self.filter_ei['Empty and aggregated processes'].loc[hybridized_process, 'name'],
-                    self.filter_ei['Empty and aggregated processes'].loc[hybridized_process, 'location']
+                self.filter['Empty and aggregated processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
+                    self.filter['Empty and aggregated processes'].loc[hybridized_process, 'reference product'],
+                    self.filter['Empty and aggregated processes'].loc[hybridized_process, 'name'],
+                    self.filter['Empty and aggregated processes'].loc[hybridized_process, 'location']
                 )]
             # if KeyError -> user is not using max cutoff -> some processes in filter are absent from code dict
             except KeyError:
