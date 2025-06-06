@@ -22,7 +22,7 @@ import pickle
 
 
 class Hybridize_ecoinvent:
-    def __init__(self, bw2_project_name, ecoinvent_db_name, ecoinvent_version, path_to_exiobase):
+    def __init__(self, bw2_project_name, ecoinvent_db_name, ecoinvent_version, path_to_exiobase, spatialize=False):
         """
         Class hybridizes ecoinvent with exiobase.
 
@@ -124,6 +124,9 @@ class Hybridize_ecoinvent:
 
         self.connect_filter_to_codes()
 
+        if spatialize:
+            self.spatialize_exiobase()
+
     def get_relevant_info(self):
         """ wurst is used to fasten the identification of processes with brightway2"""
 
@@ -202,6 +205,78 @@ class Hybridize_ecoinvent:
             # if KeyError -> user is not using max cutoff -> some processes in filter are absent from code dict
             except KeyError:
                 pass
+
+    def spatialize_exiobase(self):
+        """
+        EXIOBASE needs to be spatialized for it to work coherently with regioinvent. That's what this function does.
+        :return:
+        """
+
+        self.logger.info("Spatializing EXIOBASE...")
+
+        # the substances to be spatialized in EXIOBASE
+        substances = ['SOx', 'NOx', 'NH3', 'NMVOC', 'PM10', 'PM2.5', 'Water Consumption Blue']
+        # and the land flows
+        land_flows = ['Cropland - Cereal grains nec',
+                      'Cropland - Crops nec',
+                      'Cropland - Fodder crops-Cattle',
+                      'Cropland - Fodder crops-Meat animals nec',
+                      'Cropland - Fodder crops-Pigs',
+                      'Cropland - Fodder crops-Poultry',
+                      'Cropland - Fodder crops-Raw milk',
+                      'Cropland - Oil seeds',
+                      'Cropland - Paddy rice',
+                      'Cropland - Plant-based fibers',
+                      'Cropland - Sugar cane, sugar beet',
+                      'Cropland - Vegetables, fruit, nuts',
+                      'Cropland - Wheat',
+                      'Forest area - Forestry',
+                      'Other land Use: Total',
+                      'Permanent pastures - Grazing-Cattle',
+                      'Permanent pastures - Grazing-Meat animals nec',
+                      'Permanent pastures - Grazing-Raw milk',
+                      'Infrastructure land',
+                      'Forest area - Marginal use']
+
+        # Just change NOX to NOx for easier mapping afterwards
+        self.S_exio = self.S_exio.rename(
+            index={'NOX - waste - air': 'NOx - waste - air', 'NOX - agriculture - air': 'NOx - agriculture - air'})
+
+        # EXIOBASE has a lot of useless precision in elementary flows, e.g., 'SOx - non combustion - Agglomeration plant - sinter - air'
+        # and 'SOx - non combustion - Bricks production - air'. THis does not do anything except virtually increase the number of elementary flows
+        # which will be exploding after spatialization. So we aggregate these flows into a single one per substance
+        for substance in substances:
+            self.S_exio.loc[substance] = self.S_exio.loc[[i for i in self.S_exio.index if substance in i]].sum()
+        # delete old flows
+        for substance in substances:
+            self.S_exio = self.S_exio.drop([i for i in self.S_exio.index if substance in i and i != substance])
+
+        # now let's spatialize all the flows
+        for flow in substances + land_flows:
+            df = pd.concat([self.S_exio.loc[flow]] * len(self.regions_io), axis=1).T
+            df.index = pd.MultiIndex.from_product([self.regions_io, [flow]])
+
+            row_countries = df.index.get_level_values(0)
+            col_countries = df.columns.get_level_values(0)
+
+            mask = pd.DataFrame([[row == col for col in col_countries] for row in row_countries],
+                                index=df.index, columns=df.columns)
+
+            df = df.where(mask, 0)
+
+            self.S_exio = pd.concat([self.S_exio, df])
+        # drop non-spatialized flows
+        self.S_exio = self.S_exio.drop(substances + land_flows)
+
+        # need to create the units for the spatialized flows
+        spatialized_flows_units = pd.DataFrame(
+            'kg', index=[i for i in self.S_exio.index if i not in self.io_units.index], columns=['unit'])
+        spatialized_flows_units.loc[
+            [i for i in spatialized_flows_units.index if i[1] == 'Water Consumption Blue'], 'unit'] = 'Mm3'
+        spatialized_flows_units.loc[
+            [i for i in spatialized_flows_units.index if i[1] in land_flows], 'unit'] = 'km2'
+        self.io_units = pd.concat([self.io_units, spatialized_flows_units])
+        self.io_units = self.io_units.loc[[i for i in self.io_units.index if i in self.S_exio.index]]
 
     def get_uncorrected_upstream_cutoff_matrix(self):
         """
