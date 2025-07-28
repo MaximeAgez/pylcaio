@@ -1,9 +1,3 @@
-jupyterlab
-mxnet-mkl==1.6.0
-numpy==1.23.1
-h5py==3.7.0
-pymrio==0.4.8
-bw2io<0.8.8
-bw2agg==0.1.2
-brightway2==2.4.2
-git+https://github.com/majeau-bettez/ecospold2matrix#egg=ecospold2matrix
+numpy<2.0.0
+pymrio>0.4.8
+brightway2<2.5.0
