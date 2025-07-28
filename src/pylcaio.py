@@ -14,15 +14,13 @@ import brightway2 as bw2
 import pymrio
 from tqdm import tqdm
 import json
-import wurst
-import wurst.searching as ws
 import uuid
 import gzip
 import pickle
 
 
 class Hybridize_ecoinvent:
-    def __init__(self, bw2_project_name, ecoinvent_db_name, ecoinvent_version, path_to_exiobase, spatialize=False):
+    def __init__(self, bw2_project_name, ecoinvent_db_name, ecoinvent_version, path_to_exiobase):
         """
         Class hybridizes ecoinvent with exiobase.
 
@@ -64,11 +62,6 @@ class Hybridize_ecoinvent:
             self.ei_version = '3.9'
         elif ecoinvent_version in ['3.10', '3.10.1']:
             self.ei_version = '3.10'
-
-        self.logger.info("Getting technosphere matrix...")
-        # need to create an LCA object to get access to the technosphere matrix later on
-        self.lca = bw2.LCA({bw2.Database(self.db_name).random(): 1}, list(bw2.methods)[0])
-        self.lca.lci()
 
         # load exiobase through pymrio
         self.logger.info("Loading exiobase...")
@@ -124,11 +117,8 @@ class Hybridize_ecoinvent:
 
         self.connect_filter_to_codes()
 
-        if spatialize:
-            self.spatialize_exiobase()
-
     def get_relevant_info(self):
-        """ wurst is used to fasten the identification of processes with brightway2"""
+        """Extracting relevant information from the Data package."""
 
         self.logger.info("Formatting relevant data of ecoinvent for quick access...")
 
@@ -162,7 +152,7 @@ class Hybridize_ecoinvent:
                 'code']
             for act in bw2.Database(self.db_name)}
 
-        for hybridized_process in tqdm(self.filter['Hybridized processes'].index, leave=True):
+        for hybridized_process in self.filter['Hybridized processes'].index:
             try:
                 self.filter['Hybridized processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter['Hybridized processes'].loc[hybridized_process, 'reference product'],
@@ -173,7 +163,7 @@ class Hybridize_ecoinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter['Market processes'].index, leave=True):
+        for hybridized_process in self.filter['Market processes'].index:
             try:
                 self.filter['Market processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter['Market processes'].loc[hybridized_process, 'reference product'],
@@ -184,7 +174,7 @@ class Hybridize_ecoinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter['Internal and activities'].index, leave=True):
+        for hybridized_process in self.filter['Internal and activities'].index:
             try:
                 self.filter['Internal and activities'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter['Internal and activities'].loc[hybridized_process, 'reference product'],
@@ -195,7 +185,7 @@ class Hybridize_ecoinvent:
             except KeyError:
                 pass
 
-        for hybridized_process in tqdm(self.filter['Empty and aggregated processes'].index, leave=True):
+        for hybridized_process in self.filter['Empty and aggregated processes'].index:
             try:
                 self.filter['Empty and aggregated processes'].loc[hybridized_process, 'code'] = codes_of_ecoinvent[(
                     self.filter['Empty and aggregated processes'].loc[hybridized_process, 'reference product'],
@@ -205,78 +195,6 @@ class Hybridize_ecoinvent:
             # if KeyError -> user is not using max cutoff -> some processes in filter are absent from code dict
             except KeyError:
                 pass
-
-    def spatialize_exiobase(self):
-        """
-        EXIOBASE needs to be spatialized for it to work coherently with regioinvent. That's what this function does.
-        :return:
-        """
-
-        self.logger.info("Spatializing EXIOBASE...")
-
-        # the substances to be spatialized in EXIOBASE
-        substances = ['SOx', 'NOx', 'NH3', 'NMVOC', 'PM10', 'PM2.5', 'Water Consumption Blue']
-        # and the land flows
-        land_flows = ['Cropland - Cereal grains nec',
-                      'Cropland - Crops nec',
-                      'Cropland - Fodder crops-Cattle',
-                      'Cropland - Fodder crops-Meat animals nec',
-                      'Cropland - Fodder crops-Pigs',
-                      'Cropland - Fodder crops-Poultry',
-                      'Cropland - Fodder crops-Raw milk',
-                      'Cropland - Oil seeds',
-                      'Cropland - Paddy rice',
-                      'Cropland - Plant-based fibers',
-                      'Cropland - Sugar cane, sugar beet',
-                      'Cropland - Vegetables, fruit, nuts',
-                      'Cropland - Wheat',
-                      'Forest area - Forestry',
-                      'Other land Use: Total',
-                      'Permanent pastures - Grazing-Cattle',
-                      'Permanent pastures - Grazing-Meat animals nec',
-                      'Permanent pastures - Grazing-Raw milk',
-                      'Infrastructure land',
-                      'Forest area - Marginal use']
-
-        # Just change NOX to NOx for easier mapping afterwards
-        self.S_exio = self.S_exio.rename(
-            index={'NOX - waste - air': 'NOx - waste - air', 'NOX - agriculture - air': 'NOx - agriculture - air'})
-
-        # EXIOBASE has a lot of useless precision in elementary flows, e.g., 'SOx - non combustion - Agglomeration plant - sinter - air'
-        # and 'SOx - non combustion - Bricks production - air'. THis does not do anything except virtually increase the number of elementary flows
-        # which will be exploding after spatialization. So we aggregate these flows into a single one per substance
-        for substance in substances:
-            self.S_exio.loc[substance] = self.S_exio.loc[[i for i in self.S_exio.index if substance in i]].sum()
-        # delete old flows
-        for substance in substances:
-            self.S_exio = self.S_exio.drop([i for i in self.S_exio.index if substance in i and i != substance])
-
-        # now let's spatialize all the flows
-        for flow in substances + land_flows:
-            df = pd.concat([self.S_exio.loc[flow]] * len(self.regions_io), axis=1).T
-            df.index = pd.MultiIndex.from_product([self.regions_io, [flow]])
-
-            row_countries = df.index.get_level_values(0)
-            col_countries = df.columns.get_level_values(0)
-
-            mask = pd.DataFrame([[row == col for col in col_countries] for row in row_countries],
-                                index=df.index, columns=df.columns)
-
-            df = df.where(mask, 0)
-
-            self.S_exio = pd.concat([self.S_exio, df])
-        # drop non-spatialized flows
-        self.S_exio = self.S_exio.drop(substances + land_flows)
-
-        # need to create the units for the spatialized flows
-        spatialized_flows_units = pd.DataFrame(
-            'kg', index=[i for i in self.S_exio.index if i not in self.io_units.index], columns=['unit'])
-        spatialized_flows_units.loc[
-            [i for i in spatialized_flows_units.index if i[1] == 'Water Consumption Blue'], 'unit'] = 'Mm3'
-        spatialized_flows_units.loc[
-            [i for i in spatialized_flows_units.index if i[1] in land_flows], 'unit'] = 'km2'
-        self.io_units = pd.concat([self.io_units, spatialized_flows_units])
-        self.io_units = self.io_units.loc[[i for i in self.io_units.index if i in self.S_exio.index]]
 
     def get_uncorrected_upstream_cutoff_matrix(self):
         """
@@ -297,7 +215,7 @@ class Hybridize_ecoinvent:
                                           columns=self.filter['Hybridized processes'].code, dtype='float')
 
         # loop through the difference processes to-be-hybridized
-        for col in tqdm(concordance_matrix.columns, leave=True):
+        for col in concordance_matrix.columns:
             act = bw2.Database(self.db_name).get(col)
             # extract location and corresponding exiobase sector
             geo = act.as_dict()['location']
@@ -478,7 +396,7 @@ class Hybridize_ecoinvent:
         lambda_filter_matrix = pd.DataFrame(0, self.covered_inputs.index, self.A_io_f_uncorrected.columns.levels[1],
                                             dtype=float)
         hybridized = self.filter['Hybridized processes'].code.tolist()
-        for col in tqdm(lambda_filter_matrix.columns, leave=True):
+        for col in lambda_filter_matrix.columns:
             if col in hybridized:
                 lambda_filter_matrix.loc[:, col] = self.covered_inputs.loc[:, self.codes_to_names[col]]
 
@@ -697,7 +615,7 @@ class Hybridize_ecoinvent:
         # reformat in convenient dictionary for search of code from name and location
         exio3_bw2_finding_codes = {(v['name'], v['location']): v['code'] for k, v in exio3_bw2.items()}
 
-        self.logger.info("Formatting technosphere inputs...")
+        self.logger.info("Formatting technosphere inputs to brightway2 format...")
 
         # add the production exchanges to the activities of exiobase3
         for sector in exio3_bw2:
@@ -744,7 +662,7 @@ class Hybridize_ecoinvent:
         # go to dict for speed
         dff_dict = dff.to_dict()
 
-        self.logger.info("Formatting biosphere inputs...")
+        self.logger.info("Formatting biosphere inputs to brightway2 format...")
 
         # populate the biosphere exchanges within the activities of exiobase3
         for exc in tqdm(dff_dict, leave=True):
@@ -1014,7 +932,7 @@ class Hybridize_regioinvent:
         self.spatialize_exiobase()
 
     def get_relevant_info(self):
-        """ wurst is used to fasten the identification of processes with brightway2"""
+        """Extracting relevant information from the Data package."""
 
         self.logger.info("Formatting relevant data of regioinvent for quick access...")
 
